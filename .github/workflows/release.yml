@@ -1,8 +1,16 @@
 name: Release
 
-# Publish a release on GitHub (Releases → Draft a new release, with a tag such
-# as v0.1.0), or push a tag. Every platform is built and attached to it.
+# Three ways to make a release; each builds every platform and attaches the
+# downloads:
+#   - Actions → Release → Run workflow, and enter a version such as v0.1.0
+#   - Releases → Draft a new release, with a new tag such as v0.1.0
+#   - push a tag such as v0.1.0
 on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Version to release, e.g. v0.1.0"
+        required: true
   release:
     types: [published]
   push:
@@ -12,8 +20,11 @@ permissions:
   contents: write
 
 # Publishing a release can also report its tag being created; build once per tag.
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+
 concurrency:
-  group: release-${{ github.ref_name }}
+  group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
@@ -65,7 +76,7 @@ jobs:
 
       - name: Package
         run: |
-          name="hat_timelapse-${GITHUB_REF_NAME}-${{ matrix.target }}"
+          name="hat_timelapse-${TAG}-${{ matrix.target }}"
           mkdir -p "pkg/$name" dist
           cp out/* "pkg/$name/"
           cp README.md LICENSE-MIT LICENSE-APACHE docs/INSTALL.md docs/USER_GUIDE.md "pkg/$name/"
@@ -95,6 +106,8 @@ jobs:
         run: cd dist && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
       - uses: softprops/action-gh-release@v2
         with:
-          name: Hat Timelapse ${{ github.ref_name }}
+          tag_name: ${{ env.TAG }}
+          target_commitish: ${{ github.sha }}
+          name: Hat Timelapse ${{ env.TAG }}
           body_path: docs/RELEASE_NOTES.md
           files: dist/*
