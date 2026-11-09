@@ -1,7 +1,10 @@
 name: Release
 
-# Push a tag such as v0.1.0 to build every platform and publish a release.
+# Publish a release on GitHub (Releases → Draft a new release, with a tag such
+# as v0.1.0), or push a tag. Every platform is built and attached to it.
 on:
+  release:
+    types: [published]
   push:
     tags: ["v*"]
 
