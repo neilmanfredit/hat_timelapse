@@ -50,6 +50,10 @@ fn edit_loop() {
         std::fs::write(dir.join(name), xml).unwrap();
     }
     hat_timelapse(&dir, &["interpolate", "--method", "linear"]);
+    // Settings that are not animated reach the frames between keyframes.
+    let mid = std::fs::read_to_string(dir.join("f_020.xmp")).unwrap();
+    assert!(mid.contains(r#"crs:LensProfileEnable="1""#), "{mid}");
+    assert!(mid.contains("<rdf:li>128, 140</rdf:li>"), "{mid}");
     assert!((exposure(&dir, "f_020.xmp") - (-0.03)).abs() < 0.02);
 
     hat_timelapse(&dir, &["deflicker", "--window", "9"]);
@@ -74,7 +78,54 @@ fn edit_loop() {
 fn hat_timelapse_xmp_write(ev: &str) -> String {
     format!(
         r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
-<rdf:Description rdf:about="" xmlns:crs="http://ns.adobe.com/camera-raw-settings/1.0/" crs:Exposure2012="{ev}"/>
+<rdf:Description rdf:about="" xmlns:crs="http://ns.adobe.com/camera-raw-settings/1.0/" crs:Exposure2012="{ev}" crs:LensProfileEnable="1">
+<crs:ToneCurvePV2012><rdf:Seq><rdf:li>0, 0</rdf:li><rdf:li>128, 140</rdf:li><rdf:li>255, 255</rdf:li></rdf:Seq></crs:ToneCurvePV2012>
+</rdf:Description>
 </rdf:RDF></x:xmpmeta>"#
     )
+}
+
+#[test]
+fn lightcraft_edited_keyframes() {
+    let dir = std::env::temp_dir().join(format!("hat-tl-lc-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    for i in 0..11u32 {
+        RgbImage::from_pixel(32, 24, Rgb([110, 110, 110]))
+            .save(dir.join(format!("g_{i:02}.png")))
+            .unwrap();
+    }
+    hat_timelapse(&dir, &["init", "--keyframes", "2"]);
+    // As LightCraft writes them: complete settings as JSON in lc:settings, no crs: values.
+    for (name, ev) in [("g_00.xmp", 1.0), ("g_10.xmp", -1.0)] {
+        let json = format!(
+            r#"{{"wb":{{"mode":"asShot","temp":0.0,"tint":0.0}},"light":{{"exposure":{ev},"contrast":0.0}},"curve":{{"marker":"keep-me"}}}}"#
+        );
+        let attr = json.replace('"', "&quot;");
+        std::fs::write(
+            dir.join(name),
+            format!(
+                r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+<rdf:Description rdf:about="" xmlns:lc="http://ns.lightcraft.app/lc/1.0/" lc:settings="{attr}"/>
+</rdf:RDF></x:xmpmeta>"#
+            ),
+        )
+        .unwrap();
+    }
+    hat_timelapse(&dir, &["interpolate", "--method", "linear"]);
+    let mid = std::fs::read_to_string(dir.join("g_05.xmp")).unwrap();
+    // Exposure animated (0 midway), written for Lightroom and for LightCraft.
+    assert!(mid.contains(r#"crs:Exposure2012="+0.00""#), "{mid}");
+    let k = mid.find("lc:settings=\"").unwrap() + 13;
+    let json: serde_json::Value =
+        serde_json::from_str(&mid[k..k + mid[k..].find('"').unwrap()].replace("&quot;", "\""))
+            .unwrap();
+    assert!(
+        json["light"]["exposure"].as_f64().unwrap().abs() < 1e-6,
+        "{json}"
+    );
+    assert_eq!(json["curve"]["marker"], "keep-me");
+    // White balance was "as shot", so no temperature is forced on the frames.
+    assert!(!mid.contains("crs:Temperature"), "{mid}");
+    let _ = std::fs::remove_dir_all(&dir);
 }

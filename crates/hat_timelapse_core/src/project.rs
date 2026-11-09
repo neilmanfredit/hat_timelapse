@@ -95,6 +95,8 @@ fn default_lightcraft_cmd() -> Vec<String> {
         "{output}",
         "--opt",
         "bitDepth={bitdepth}",
+        "--settings",
+        "{xmp}",
         "{sets}",
     ]
     .map(String::from)
@@ -124,8 +126,29 @@ pub struct Project {
     pub frames: Vec<Frame>,
     #[serde(default)]
     pub motion: Vec<MotionKey>,
+    /// Develop settings that are not animated (tone curve, HSL, lens
+    /// corrections, profile…), taken from the first keyframe and written to
+    /// every frame so the whole sequence matches it.
+    #[serde(default)]
+    pub shared: SharedSettings,
     #[serde(default)]
     pub settings: Settings,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SharedSettings {
+    /// Frame the settings were taken from.
+    pub source_frame: Option<usize>,
+    /// Simple properties, qualified name → value.
+    pub properties: BTreeMap<String, String>,
+    /// Structured properties as raw XMP, qualified name → XML.
+    pub elements: BTreeMap<String, String>,
+    /// Namespaces those properties use, prefix → URI.
+    pub namespaces: BTreeMap<String, String>,
+    /// LightCraft's complete develop settings (`lc:settings`) from the source
+    /// keyframe, when it was edited in LightCraft.
+    #[serde(default)]
+    pub lightcraft: Option<serde_json::Value>,
 }
 
 impl Project {
@@ -135,6 +158,7 @@ impl Project {
             dir: dir.to_path_buf(),
             frames,
             motion: Vec::new(),
+            shared: SharedSettings::default(),
             settings: Settings::default(),
         }
     }

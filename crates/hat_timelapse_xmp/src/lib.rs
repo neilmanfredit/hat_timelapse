@@ -6,15 +6,17 @@
 //! (keywords, ratings, masks, history) is passed through untouched.
 
 use anyhow::{bail, Context, Result};
-use quick_xml::events::{BytesStart, Event};
+use quick_xml::events::{BytesEnd, BytesStart, Event};
 use quick_xml::{Reader, Writer};
 use std::collections::BTreeMap;
 use std::path::Path;
 
 pub const NS_CRS: &str = "http://ns.adobe.com/camera-raw-settings/1.0/";
 pub const NS_XMP: &str = "http://ns.adobe.com/xap/1.0/";
+/// LightCraft's own namespace; `lc:settings` holds its complete develop settings as JSON.
+pub const NS_LC: &str = "http://ns.lightcraft.app/lc/1.0/";
 
-const KNOWN_NS: &[(&str, &str)] = &[("crs", NS_CRS), ("xmp", NS_XMP)];
+const KNOWN_NS: &[(&str, &str)] = &[("crs", NS_CRS), ("xmp", NS_XMP), ("lc", NS_LC)];
 
 pub const EMPTY_SIDECAR: &str = r#"<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Hat Timelapse">
  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
@@ -33,6 +35,11 @@ pub struct Edit {
     /// Only written if the sidecar does not already carry the property.
     pub set_if_absent: BTreeMap<String, String>,
     pub remove: Vec<String>,
+    /// Structured properties (tone curves, masks, looks) as raw XML, keyed by
+    /// qualified name. Each replaces any existing property of that name.
+    pub elements: BTreeMap<String, String>,
+    /// Namespace declarations (prefix → URI) the copied properties need.
+    pub namespaces: BTreeMap<String, String>,
 }
 
 impl Edit {
@@ -115,6 +122,89 @@ fn collect_attrs(e: &BytesStart, out: &mut BTreeMap<String, String>) -> Result<(
     Ok(())
 }
 
+/// Everything a sidecar's develop settings consist of: simple properties,
+/// structured properties as raw XML, and the namespaces they use.
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct Snapshot {
+    pub properties: BTreeMap<String, String>,
+    /// Child elements of `rdf:Description` that contain further elements.
+    pub elements: BTreeMap<String, String>,
+    pub namespaces: BTreeMap<String, String>,
+}
+
+pub fn snapshot(xml: &str) -> Result<Snapshot> {
+    let properties = read_properties(xml)?;
+    let mut elements = BTreeMap::new();
+    let mut namespaces = BTreeMap::new();
+    let mut reader = Reader::from_str(xml);
+    let mut depth = 0usize;
+    let mut desc_depth: Option<usize> = None;
+    // (name, start offset, has nested element)
+    let mut open: Option<(String, usize, bool)> = None;
+    loop {
+        let before = reader.buffer_position() as usize;
+        let ev = reader.read_event()?;
+        let mut note_ns = |e: &BytesStart| -> Result<()> {
+            for a in e.attributes() {
+                let a = a?;
+                let k = String::from_utf8_lossy(a.key.as_ref()).into_owned();
+                if let Some(p) = k.strip_prefix("xmlns:") {
+                    namespaces
+                        .entry(p.to_string())
+                        .or_insert(a.unescape_value()?.into_owned());
+                }
+            }
+            Ok(())
+        };
+        match ev {
+            Event::Start(e) => {
+                note_ns(&e)?;
+                depth += 1;
+                let name = qname(&e);
+                if desc_depth.is_none() && name == "rdf:Description" {
+                    desc_depth = Some(depth);
+                } else if desc_depth == Some(depth - 1) {
+                    open = Some((name, before, false));
+                } else if let Some(o) = open.as_mut() {
+                    o.2 = true;
+                }
+            }
+            Event::Empty(e) => {
+                note_ns(&e)?;
+                if let Some(o) = open.as_mut() {
+                    o.2 = true;
+                }
+            }
+            Event::End(_) => {
+                if desc_depth == Some(depth - 1) {
+                    if let Some((name, start, nested)) = open.take() {
+                        if nested {
+                            let end = reader.buffer_position() as usize;
+                            elements.insert(name, xml[start..end].to_string());
+                        }
+                    }
+                } else if desc_depth == Some(depth) {
+                    desc_depth = Some(usize::MAX); // only the first Description
+                }
+                depth = depth.saturating_sub(1);
+            }
+            Event::Eof => break,
+            _ => {}
+        }
+    }
+    Ok(Snapshot {
+        properties,
+        elements,
+        namespaces,
+    })
+}
+
+pub fn snapshot_file(path: &Path) -> Result<Snapshot> {
+    let xml =
+        std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+    snapshot(&xml).with_context(|| format!("parsing {}", path.display()))
+}
+
 /// Apply `edit` to the first `rdf:Description` in `xml`. Properties are written
 /// as attributes (Lightroom's own layout); any element form of a changed
 /// property is removed so there is only one value.
@@ -126,7 +216,18 @@ pub fn apply(xml: &str, edit: &Edit) -> Result<String> {
             set.insert(k.clone(), v.clone());
         }
     }
-    let touched = |k: &str| set.contains_key(k) || edit.remove.iter().any(|r| r == k);
+    let mut remove = edit.remove.clone();
+    remove.extend(edit.elements.keys().cloned());
+    let touched = |k: &str| set.contains_key(k) || remove.iter().any(|r| r == k);
+    let write_elements = |w: &mut Writer<Vec<u8>>| {
+        for raw in edit.elements.values() {
+            w.get_mut().extend_from_slice(b"\n   ");
+            w.get_mut().extend_from_slice(raw.as_bytes());
+        }
+        if !edit.elements.is_empty() {
+            w.get_mut().extend_from_slice(b"\n  ");
+        }
+    };
 
     let mut reader = Reader::from_str(xml);
     let mut writer = Writer::new(Vec::with_capacity(xml.len() + 1024));
@@ -156,7 +257,12 @@ pub fn apply(xml: &str, edit: &Edit) -> Result<String> {
                 depth += 1;
                 let name = qname(&e);
                 if !done && name == "rdf:Description" {
-                    writer.write_event(Event::Start(rewrite(&e, &set, &edit.remove)?))?;
+                    writer.write_event(Event::Start(rewrite(
+                        &e,
+                        &set,
+                        &remove,
+                        &edit.namespaces,
+                    )?))?;
                     desc_depth = Some(depth);
                     done = true;
                 } else if desc_depth == Some(depth - 1) && touched(&name) {
@@ -168,7 +274,14 @@ pub fn apply(xml: &str, edit: &Edit) -> Result<String> {
             Event::Empty(e) => {
                 let name = qname(&e);
                 if !done && name == "rdf:Description" {
-                    writer.write_event(Event::Empty(rewrite(&e, &set, &edit.remove)?))?;
+                    let start = rewrite(&e, &set, &remove, &edit.namespaces)?;
+                    if edit.elements.is_empty() {
+                        writer.write_event(Event::Empty(start))?;
+                    } else {
+                        writer.write_event(Event::Start(start))?;
+                        write_elements(&mut writer);
+                        writer.write_event(Event::End(BytesEnd::new("rdf:Description")))?;
+                    }
                     done = true;
                 } else if desc_depth == Some(depth) && touched(&name) {
                     // drop
@@ -178,6 +291,7 @@ pub fn apply(xml: &str, edit: &Edit) -> Result<String> {
             }
             Event::End(e) => {
                 if desc_depth == Some(depth) {
+                    write_elements(&mut writer);
                     desc_depth = None;
                 }
                 depth = depth.saturating_sub(1);
@@ -197,6 +311,7 @@ fn rewrite<'a>(
     e: &BytesStart<'a>,
     set: &BTreeMap<String, String>,
     remove: &[String],
+    namespaces: &BTreeMap<String, String>,
 ) -> Result<BytesStart<'static>> {
     let mut out = BytesStart::new(qname(e));
     let mut declared: Vec<String> = Vec::new();
@@ -211,17 +326,26 @@ fn rewrite<'a>(
         }
         out.push_attribute((k.as_str(), a.unescape_value()?.as_ref()));
     }
-    for k in set.keys() {
-        if let Some((prefix, _)) = k.split_once(':') {
-            if !declared.iter().any(|d| d == prefix) {
-                let uri = KNOWN_NS
-                    .iter()
-                    .find(|(p, _)| *p == prefix)
-                    .map(|(_, u)| *u)
-                    .with_context(|| format!("unknown XMP namespace prefix `{prefix}`"))?;
-                out.push_attribute((format!("xmlns:{prefix}").as_str(), uri));
-                declared.push(prefix.to_string());
-            }
+    // Declare what the new properties need. `rdf` and `x` are declared by the
+    // enclosing elements of every XMP packet.
+    let needed = set
+        .keys()
+        .filter_map(|k| k.split_once(':').map(|(p, _)| p))
+        .chain(
+            namespaces
+                .keys()
+                .map(String::as_str)
+                .filter(|p| !matches!(*p, "rdf" | "x" | "xml")),
+        );
+    for prefix in needed.collect::<Vec<_>>() {
+        if !declared.iter().any(|d| d == prefix) {
+            let uri = namespaces
+                .get(prefix)
+                .map(String::as_str)
+                .or_else(|| KNOWN_NS.iter().find(|(p, _)| *p == prefix).map(|(_, u)| *u))
+                .with_context(|| format!("unknown XMP namespace prefix `{prefix}`"))?;
+            out.push_attribute((format!("xmlns:{prefix}").as_str(), uri));
+            declared.push(prefix.to_string());
         }
     }
     for (k, v) in set {
@@ -296,6 +420,36 @@ mod tests {
         assert_eq!(p["xmp:Rating"], "3");
         assert!(out.contains("<rdf:li>255, 255</rdf:li>"));
         assert_eq!(out.matches("Shadows2012").count(), 1);
+    }
+
+    #[test]
+    fn copies_structured_settings_between_sidecars() {
+        let snap = snapshot(LR).unwrap();
+        assert!(snap.elements.contains_key("crs:ToneCurvePV2012"));
+        assert!(!snap.elements.contains_key("crs:Shadows2012"));
+        assert_eq!(snap.namespaces["crs"], NS_CRS);
+
+        let edit = Edit {
+            elements: snap.elements.clone(),
+            namespaces: snap.namespaces.clone(),
+            ..Default::default()
+        }
+        .set("crs:Exposure2012", "+0.25");
+        // Into a fresh, self-closing sidecar.
+        let out = apply(
+            EMPTY_SIDECAR
+                .replace(">\n  </rdf:Description>", "/>")
+                .as_str(),
+            &edit,
+        )
+        .unwrap();
+        assert!(out.contains("<rdf:li>255, 255</rdf:li>"), "{out}");
+        assert_eq!(snapshot(&out).unwrap().elements, snap.elements);
+        assert_eq!(read_properties(&out).unwrap()["crs:Exposure2012"], "+0.25");
+
+        // Applying again replaces rather than duplicates.
+        let twice = apply(&out, &edit).unwrap();
+        assert_eq!(twice.matches("ToneCurvePV2012>").count(), 2);
     }
 
     #[test]

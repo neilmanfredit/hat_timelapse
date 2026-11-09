@@ -13,7 +13,7 @@ use hat_timelapse_render::framing::{self, FrameJob, Size};
 use hat_timelapse_render::{lightcraft, video};
 use hat_timelapse_xmp::Edit;
 use rayon::prelude::*;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
 pub fn load(dir: &Path) -> Result<Project> {
@@ -172,6 +172,12 @@ pub fn interpolate(dir: &Path, method: Option<Method>) -> Result<()> {
             }
         })
         .collect::<Result<_>>()?;
+    // Keyframes edited in LightCraft carry their values in `lc:settings`, which
+    // LightCraft prefers over the Camera Raw fields. Read those where present.
+    let props: Vec<BTreeMap<String, String>> = props
+        .into_iter()
+        .map(|pr| with_lightcraft_values(&p, pr))
+        .collect();
 
     let n = p.frames.len();
     let mut animated = Vec::new();
@@ -217,8 +223,197 @@ pub fn interpolate(dir: &Path, method: Option<Method>) -> Result<()> {
         animated.len(),
         keys.len()
     );
+    p.shared = shared_settings(&p, &keys, &animated)?;
     write_sidecars(&mut p)?;
     p.save()
+}
+
+/// LightCraft control path for a parameter, honouring project overrides.
+fn lc_control<'a>(p: &'a Project, def: &'a params::ParamDef) -> Option<&'a str> {
+    p.settings
+        .lightcraft_controls
+        .get(def.crs)
+        .map(String::as_str)
+        .or(def.lightcraft)
+}
+
+fn json_get(v: &serde_json::Value, path: &str) -> Option<f64> {
+    path.split('.').try_fold(v, |v, k| v.get(k))?.as_f64()
+}
+
+fn json_set(v: &mut serde_json::Value, path: &str, x: f64) {
+    let mut cur = v;
+    let parts: Vec<&str> = path.split('.').collect();
+    for (k, part) in parts.iter().enumerate() {
+        if !cur.is_object() {
+            *cur = serde_json::json!({});
+        }
+        let obj = cur.as_object_mut().expect("object");
+        if k == parts.len() - 1 {
+            obj.insert(part.to_string(), serde_json::json!(x));
+            return;
+        }
+        cur = obj
+            .entry(part.to_string())
+            .or_insert_with(|| serde_json::json!({}));
+    }
+}
+
+/// Overlay values from a sidecar's `lc:settings` onto its Camera Raw properties.
+/// Values at their neutral default are skipped (LightCraft writes every field),
+/// and white balance counts only when it is set to a custom value.
+fn with_lightcraft_values(
+    p: &Project,
+    mut props: BTreeMap<String, String>,
+) -> BTreeMap<String, String> {
+    let Some(json) = props
+        .get("lc:settings")
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok())
+    else {
+        return props;
+    };
+    let custom_wb = json.pointer("/wb/mode").and_then(|m| m.as_str()) == Some("custom");
+    for def in PARAMS {
+        let Some(path) = lc_control(p, def) else {
+            continue;
+        };
+        let qn = format!("crs:{}", def.crs);
+        let Some(v) = json_get(&json, path) else {
+            props.remove(&qn);
+            continue;
+        };
+        let is_wb = path.starts_with("wb.");
+        if (is_wb && !custom_wb) || (!is_wb && def.default == Some(v)) {
+            props.remove(&qn);
+        } else {
+            props.insert(qn, v.to_string());
+        }
+    }
+    props
+}
+
+/// A frame's complete LightCraft settings: the source keyframe's settings with
+/// this frame's animated values (including exposure offsets) applied.
+pub fn frame_lightcraft_json(p: &Project, i: usize) -> Option<serde_json::Value> {
+    let mut json = p.shared.lightcraft.clone()?;
+    let f = &p.frames[i];
+    let mut keys: Vec<&str> = f.values.keys().map(String::as_str).collect();
+    if !keys.contains(&EXPOSURE) {
+        keys.push(EXPOSURE);
+    }
+    for k in keys {
+        let def = params::find(k).expect("known parameter");
+        if let (Some(path), Some(v)) = (lc_control(p, def), p.final_value(i, k)) {
+            json_set(&mut json, path, def.clamp(v));
+        }
+    }
+    Some(json)
+}
+
+/// Properties that describe a particular file or are managed by Hat Timelapse,
+/// and so are never copied between frames.
+const NOT_SHARED: &[&str] = &[
+    "crs:RawFileName",
+    "crs:AlreadyApplied",
+    "crs:HasSettings",
+    "crs:AsShotTemperature",
+    "crs:AsShotTint",
+];
+
+/// Collect the first keyframe's non-animated develop settings, and warn about
+/// any that other keyframes set differently (those differences are not used).
+fn shared_settings(
+    p: &Project,
+    keys: &[usize],
+    animated: &[&str],
+) -> Result<hat_timelapse_core::project::SharedSettings> {
+    let snap_of = |i: usize| -> Result<Option<hat_timelapse_xmp::Snapshot>> {
+        let path = sequence::sidecar_path(&p.frame_path(i));
+        if path.exists() {
+            hat_timelapse_xmp::snapshot_file(&path).map(Some)
+        } else {
+            Ok(None)
+        }
+    };
+    let Some(first) = snap_of(keys[0])? else {
+        return Ok(Default::default());
+    };
+    let lightcraft = first
+        .properties
+        .get("lc:settings")
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(s).ok())
+        .filter(|v| v.is_object());
+    let keep = |k: &String| {
+        k.starts_with("crs:")
+            && !NOT_SHARED.contains(&k.as_str())
+            && !animated.iter().any(|a| k.strip_prefix("crs:") == Some(*a))
+    };
+    let properties: BTreeMap<String, String> = first
+        .properties
+        .into_iter()
+        .filter(|(k, _)| keep(k))
+        .collect();
+    let elements: BTreeMap<String, String> = first
+        .elements
+        .into_iter()
+        .filter(|(k, _)| keep(k))
+        .collect();
+
+    let mut differing = std::collections::BTreeSet::new();
+    for &i in &keys[1..] {
+        if let Some(other) = snap_of(i)? {
+            for (k, v) in &properties {
+                if other.properties.get(k).is_some_and(|o| o != v) {
+                    differing.insert(k.clone());
+                }
+            }
+            for (k, v) in &elements {
+                if other.elements.get(k).is_some_and(|o| o != v) {
+                    differing.insert(k.clone());
+                }
+            }
+        }
+    }
+    if let Some(base) = &lightcraft {
+        // Compare LightCraft settings with the animated controls blanked out.
+        let blank = |mut v: serde_json::Value| {
+            for def in PARAMS {
+                if let Some(path) = lc_control(p, def) {
+                    json_set(&mut v, path, 0.0);
+                }
+            }
+            v
+        };
+        let base = blank(base.clone());
+        for &i in &keys[1..] {
+            let other = snap_of(i)?
+                .and_then(|s| s.properties.get("lc:settings").cloned())
+                .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
+            if other.is_some_and(|o| blank(o) != base) {
+                differing.insert("LightCraft settings (curve, colour, detail, masks…)".to_string());
+                break;
+            }
+        }
+    }
+    if !differing.is_empty() {
+        eprintln!(
+            "warning: these settings differ between keyframes but cannot be animated, so the first \
+             keyframe's values are used for every frame: {}",
+            differing.iter().map(|k| k.trim_start_matches("crs:")).collect::<Vec<_>>().join(", ")
+        );
+    }
+    println!(
+        "copied {} other settings from keyframe {} to every frame",
+        properties.len() + elements.len(),
+        keys[0]
+    );
+    Ok(hat_timelapse_core::project::SharedSettings {
+        source_frame: Some(keys[0]),
+        properties,
+        elements,
+        namespaces: first.namespaces,
+        lightcraft,
+    })
 }
 
 /// Write the current develop values plus Hat Timelapse's exposure offsets into every sidecar.
@@ -227,7 +422,18 @@ pub fn write_sidecars(p: &mut Project) -> Result<()> {
     let edits: Vec<(PathBuf, Edit, f64)> = (0..p.frames.len())
         .map(|i| {
             let f = &p.frames[i];
-            let mut e = Edit::default()
+            let mut e = Edit {
+                elements: p.shared.elements.clone(),
+                namespaces: p.shared.namespaces.clone(),
+                ..Default::default()
+            };
+            for (k, v) in &p.shared.properties {
+                e = e.set(k, v.clone());
+            }
+            if let Some(json) = frame_lightcraft_json(p, i) {
+                e = e.set("lc:settings", json.to_string());
+            }
+            let mut e = e
                 .set("crs:HasSettings", "True")
                 .set_if_absent("crs:ProcessVersion", "11.0")
                 .set_if_absent("crs:Version", "15.0");
@@ -390,8 +596,25 @@ pub fn render(dir: &Path, a: &RenderArgs) -> Result<()> {
             } else {
                 (a.bit_depth, Vec::new())
             };
+            // LightCraft-edited sequences get each frame's complete settings as
+            // JSON (merged by `render --settings`); others use the sidecar.
+            let settings = match frame_lightcraft_json(&p, i) {
+                Some(json) => {
+                    let path = p
+                        .work_dir()
+                        .join("settings")
+                        .join(lightcraft::rendered_name(&input, "json"));
+                    if let Err(e) = std::fs::create_dir_all(path.parent().unwrap())
+                        .and_then(|_| std::fs::write(&path, json.to_string()))
+                    {
+                        eprintln!("warning: could not write {}: {e}", path.display());
+                    }
+                    path
+                }
+                None => sequence::sidecar_path(&input),
+            };
             lightcraft::Job {
-                xmp: sequence::sidecar_path(&input),
+                xmp: settings,
                 input,
                 output,
                 bit_depth,

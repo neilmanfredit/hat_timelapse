@@ -24,6 +24,13 @@ pub struct Job {
 pub fn build_args(template: &[String], job: &Job) -> Vec<String> {
     let mut out = Vec::new();
     for t in template {
+        if t == "{xmp}" && !job.xmp.exists() {
+            // No sidecar yet (nothing edited): drop the option that would name it.
+            if out.last().is_some_and(|a: &String| a.starts_with('-')) {
+                out.pop();
+            }
+            continue;
+        }
         if t == "{sets}" {
             for (k, v) in &job.sets {
                 out.push("--set".into());
@@ -116,10 +123,13 @@ mod tests {
         ]
         .map(String::from)
         .to_vec();
-        let j = Job {
+        let xmp = std::env::temp_dir().join(format!("hat-tl-{}.xmp", std::process::id()));
+        std::fs::write(&xmp, "<x/>").unwrap();
+        let xs = xmp.to_string_lossy().into_owned();
+        let mut j = Job {
             input: "a.cr3".into(),
             output: "a.tif".into(),
-            xmp: "a.xmp".into(),
+            xmp: xmp.clone(),
             bit_depth: 16,
             sets: vec![("light.exposure".into(), 0.5)],
             extra: vec!["--size".into(), "1024".into()],
@@ -135,11 +145,27 @@ mod tests {
                 "--opt",
                 "bitDepth=16",
                 "--settings",
-                "a.xmp",
+                xs.as_str(),
                 "--set",
                 "light.exposure=0.5000",
                 "--size",
                 "1024"
+            ]
+        );
+        // Without a sidecar the `--settings` option is left out.
+        std::fs::remove_file(&xmp).unwrap();
+        j.sets.clear();
+        j.extra.clear();
+        assert_eq!(
+            build_args(&t, &j),
+            [
+                "lightcraft-cli",
+                "render",
+                "a.cr3",
+                "-o",
+                "a.tif",
+                "--opt",
+                "bitDepth=16"
             ]
         );
     }
