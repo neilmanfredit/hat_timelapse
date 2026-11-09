@@ -1,0 +1,14 @@
+[package]
+name = "hat_timelapse_render"
+description = "LightCraft rendering, framing (crop, pan/zoom, scale), TIFF sequences and video encoding"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+image.workspace = true
+rayon.workspace = true
+hat_timelapse_core.workspace = true

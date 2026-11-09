@@ -1,0 +1,23 @@
+[package]
+name = "hat_timelapse_cli"
+description = "Hat Timelapse command-line timelapse workflow"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "hat_timelapse"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+serde_json.workspace = true
+rayon.workspace = true
+hat_timelapse_core.workspace = true
+hat_timelapse_xmp.workspace = true
+hat_timelapse_render.workspace = true
+
+[dev-dependencies]
+image.workspace = true
+serde_json.workspace = true

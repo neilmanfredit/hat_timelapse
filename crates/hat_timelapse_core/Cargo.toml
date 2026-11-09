@@ -1,0 +1,14 @@
+[package]
+name = "hat_timelapse_core"
+description = "Sequence model, keyframes, holy-grail and deflicker maths for Hat Timelapse"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+kamadak-exif.workspace = true
+image.workspace = true
+rayon.workspace = true

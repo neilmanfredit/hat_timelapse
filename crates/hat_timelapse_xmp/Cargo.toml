@@ -1,0 +1,10 @@
+[package]
+name = "hat_timelapse_xmp"
+description = "Read and update Camera Raw (crs:) XMP sidecars used by Lightroom and LightCraft"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+quick-xml.workspace = true
