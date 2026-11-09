@@ -22,18 +22,23 @@ tracks what is built, what is next and what still needs checking.
 | Hand-off | 16-bit or float TIFF sequence with `sequence.json` for EffectCraft and FilmCraft |
 | Batch | Many projects, chosen steps, several codecs per pass, keep-going, resumable |
 
-## To confirm with a LightCraft build
+## Confirmed with LightCraft 0.20.0 (macOS, Canon EOS R CR3)
 
-1. **Control names.** `params.rs` maps Camera Raw names to LightCraft controls.
-   `light.exposure`, `light.highlights`, `light.shadows` and `effects.clarity`
-   appear in LightCraft's documentation. The others (`wb.temperature`,
-   `color.vibrance` and so on) are best guesses and need checking against
-   `lightcraft-cli`'s command registry.
-2. **Render template.** Confirm the arguments for 16-bit TIFF and 32-bit float
-   TIFF output, and whether `render` applies an existing sidecar. If it does,
-   Hat Timelapse could rely on sidecars alone.
-3. **Crop through the CLI.** Find out whether LightCraft exposes crop as a
-   control. If so, map the `Crop*` parameters too.
+- Control names match LightCraft's Camera Raw mapping. White balance is
+  `wb.temp` and `wb.tint`.
+- `render --opt bitDepth=16` gives 16-bit TIFF and `bitDepth=32` gives linear
+  float TIFF, both at full sensor resolution (6720×4480).
+- Develop settings apply both through `--set control=value` and through
+  `--settings <file.xmp>`.
+
+## Still open
+
+- **Crop through the CLI.** Crop is a command in LightCraft (`crop.set`), not a
+  slider, so the `Crop*` parameters are not passed to LightCraft. Pan and zoom
+  use Hat Timelapse's own framing stage instead.
+- **Carry non-animated settings to every frame.** Edits made on keyframes that
+  Hat Timelapse does not interpolate (tone curve, HSL, lens corrections,
+  profiles) should be copied from the first keyframe to every frame.
 
 ## Next
 

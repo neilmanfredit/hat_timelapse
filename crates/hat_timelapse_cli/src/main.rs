@@ -170,6 +170,9 @@ pub struct RenderArgs {
     /// Render small JPEG previews into .hat_timelapse/previews instead (for deflicker).
     #[arg(long)]
     pub previews: bool,
+    /// Bits per channel: 16 for SDR, 32 (linear float) for HDR or compositing.
+    #[arg(long, default_value_t = 16, value_parser = parse_bit_depth)]
+    pub bit_depth: u8,
 }
 
 #[derive(Args, Clone)]
@@ -293,6 +296,15 @@ impl From<CodecArg> for Codec {
             CodecArg::DnxhrHqx => Codec::DnxhrHqx,
             CodecArg::Dnxhr444 => Codec::Dnxhr444,
         }
+    }
+}
+
+fn parse_bit_depth(s: &str) -> Result<u8, String> {
+    match s.trim() {
+        "8" => Ok(8),
+        "16" => Ok(16),
+        "32" => Ok(32),
+        _ => Err("bit depth must be 8, 16 or 32".into()),
     }
 }
 

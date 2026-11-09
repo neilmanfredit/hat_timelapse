@@ -385,10 +385,18 @@ pub fn render(dir: &Path, a: &RenderArgs) -> Result<()> {
                 })
                 .collect();
             let output = out_dir.join(lightcraft::rendered_name(&input, ext));
+            let (bit_depth, extra) = if a.previews {
+                (8, vec!["--size".to_string(), "1024".to_string()])
+            } else {
+                (a.bit_depth, Vec::new())
+            };
             lightcraft::Job {
+                xmp: sequence::sidecar_path(&input),
                 input,
                 output,
+                bit_depth,
                 sets,
+                extra,
             }
         })
         .collect();
@@ -727,14 +735,20 @@ pub fn batch(a: &BatchArgs) -> Result<()> {
                     "holy-grail" => holy_grail(dir, 0, 0.05)?,
                     "interpolate" => interpolate(dir, None)?,
                     "deflicker" => deflicker(dir, &a.deflicker)?,
-                    "render" => render(
-                        dir,
-                        &RenderArgs {
-                            format: "tif".into(),
-                            overwrite: false,
-                            previews: false,
-                        },
-                    )?,
+                    "render" => {
+                        // HDR and linear outputs need LightCraft's float TIFF.
+                        let colour: OutputSpace = a.video.frame.colour.into();
+                        let float = colour.is_hdr() || colour == OutputSpace::Linear;
+                        render(
+                            dir,
+                            &RenderArgs {
+                                format: "tif".into(),
+                                overwrite: false,
+                                previews: false,
+                                bit_depth: if float { 32 } else { 16 },
+                            },
+                        )?
+                    }
                     "export" => {
                         export(
                             dir,

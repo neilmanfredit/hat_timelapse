@@ -40,8 +40,12 @@ formats the editors already use:
 - Rust 1.88 or newer to build.
 - `ffmpeg` on the PATH for video. It needs libx264, libx265, prores_ks and
   dnxhd, plus libsvtav1 for AV1. `hat_timelapse doctor` checks which are present.
-- `lightcraft-cli` on the PATH for the LightCraft route. Build it from the
-  LightCraft repo with `cargo build --release -p lightcraft-cli`.
+- `lightcraft-cli` on the PATH for the LightCraft route. Tested with
+  LightCraft 0.20.0. On macOS it is a separate download from the app: get
+  `lightcraft-cli-<version>-macos-universal.zip` from the LightCraft releases
+  page (matching your app's version), or build it with
+  `cargo build --release -p lightcraft-cli`. Put the program itself, not the
+  folder it comes in, in `~/bin` and add `~/bin` to your PATH.
 - `exiftool` (optional). It reads metadata from CR3, RAF and other raws that
   are not TIFF-based. DNG, CR2, NEF, ARW, ORF, PEF, RW2, JPEG and TIFF are read
   natively.
@@ -117,8 +121,15 @@ first, so re-running a step never moves your own values.
 
 The mapping from Camera Raw names to LightCraft controls is in
 `crates/hat_timelapse_core/src/params.rs`. You can override it per project under
-`settings.lightcraft_controls` in `hat_timelapse.json`. The render command itself
-is a template under `settings.lightcraft_command`.
+`settings.lightcraft_controls` in `hat_timelapse.json`. The names match
+LightCraft's own Camera Raw mapping and were confirmed against LightCraft 0.20.0.
+
+The render command is a template under `settings.lightcraft_command`. By
+default each frame is rendered with
+`lightcraft-cli render {input} -o {output} --opt bitDepth={bitdepth} {sets}`,
+where `{sets}` becomes one `--set control=value` per animated parameter. To
+have LightCraft read the frame's sidecar instead, add `"--settings", "{xmp}"`
+to the template. Both routes were tested and produce the same develop.
 
 ## Output
 
@@ -160,9 +171,9 @@ matrix and tags the stream.
 | `hdr-hlg` | BT.2020 | ARIB STD-B67 (HLG). Diffuse white at 75%. | Broadcast HDR, YouTube |
 | `linear` | BT.709 | Linear, 32-bit float TIFF | Compositing in EffectCraft (TIFF export only) |
 
-For true HDR, export 32-bit float TIFF from LightCraft (it supports float TIFF
-export with HDR editing). Set `settings.lightcraft_command` to request it.
-Hat Timelapse treats float input as scene-linear, so highlights above diffuse
+For true HDR, render 32-bit float TIFF from LightCraft with
+`hat_timelapse render --bit-depth 32` (batch does this automatically when the
+output colour is `hdr-pq`, `hdr-hlg` or `linear`). Hat Timelapse treats float input as scene-linear, so highlights above diffuse
 white keep their headroom all the way into the PQ or HLG master. 8 and 16-bit
 inputs are treated as sRGB.
 
@@ -212,9 +223,10 @@ sequences.
 ## Status
 
 Version 0.1, command line only. The full pipeline runs end to end and is
-tested on Linux. CI builds and tests on Linux, macOS and Windows. The
-LightCraft control names and render template still need confirming against a
-LightCraft build; see `docs/ROADMAP.md`. A desktop app with a graph-based
+tested on Linux. CI builds and tests on Linux, macOS and Windows. LightCraft
+rendering was confirmed with LightCraft 0.20.0 on macOS with Canon EOS R CR3
+files: full-resolution 16-bit and 32-bit float TIFF, with exposure and white
+balance applied both by `--set` and by XMP settings. A desktop app with a graph-based
 keyframe and brightness editor is the next major piece.
 
 ## Licence

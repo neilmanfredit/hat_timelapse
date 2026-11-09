@@ -2,8 +2,8 @@
 //!
 //! Each parameter is stored in XMP under its Camera Raw (`crs:`) name, which both
 //! Lightroom and LightCraft read. `lightcraft` is the control name passed to
-//! `lightcraft-cli render --set`; it can be overridden per project because
-//! LightCraft is still moving quickly.
+//! `lightcraft-cli render --set`. The names match LightCraft's own Camera Raw
+//! mapping (LightCraft 0.20) and can be overridden per project.
 
 #[derive(Debug, Clone, Copy)]
 pub struct ParamDef {
@@ -99,7 +99,7 @@ pub const PARAMS: &[ParamDef] = &[
     ),
     p(
         "Temperature",
-        Some("wb.temperature"),
+        Some("wb.temp"),
         2000.0,
         50000.0,
         0,

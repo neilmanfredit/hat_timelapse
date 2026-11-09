@@ -10,8 +10,14 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 pub struct Job {
     pub input: PathBuf,
     pub output: PathBuf,
+    /// The frame's XMP sidecar, for templates that use `--settings {xmp}`.
+    pub xmp: PathBuf,
+    /// 8, 16 or 32 (32 = linear float TIFF, for HDR).
+    pub bit_depth: u8,
     /// (LightCraft control, value)
     pub sets: Vec<(String, f64)>,
+    /// Arguments appended after the template (e.g. `--size 1024` for previews).
+    pub extra: Vec<String>,
 }
 
 /// Expand the argument template. `{sets}` becomes `--set control=value` pairs.
@@ -26,10 +32,13 @@ pub fn build_args(template: &[String], job: &Job) -> Vec<String> {
         } else {
             out.push(
                 t.replace("{input}", &job.input.to_string_lossy())
-                    .replace("{output}", &job.output.to_string_lossy()),
+                    .replace("{output}", &job.output.to_string_lossy())
+                    .replace("{xmp}", &job.xmp.to_string_lossy())
+                    .replace("{bitdepth}", &job.bit_depth.to_string()),
             );
         }
     }
+    out.extend(job.extra.iter().cloned());
     out
 }
 
@@ -99,25 +108,38 @@ mod tests {
             "{input}",
             "-o",
             "{output}",
+            "--opt",
+            "bitDepth={bitdepth}",
+            "--settings",
+            "{xmp}",
             "{sets}",
         ]
         .map(String::from)
         .to_vec();
         let j = Job {
-            input: "a.dng".into(),
+            input: "a.cr3".into(),
             output: "a.tif".into(),
+            xmp: "a.xmp".into(),
+            bit_depth: 16,
             sets: vec![("light.exposure".into(), 0.5)],
+            extra: vec!["--size".into(), "1024".into()],
         };
         assert_eq!(
             build_args(&t, &j),
             [
                 "lightcraft-cli",
                 "render",
-                "a.dng",
+                "a.cr3",
                 "-o",
                 "a.tif",
+                "--opt",
+                "bitDepth=16",
+                "--settings",
+                "a.xmp",
                 "--set",
-                "light.exposure=0.5000"
+                "light.exposure=0.5000",
+                "--size",
+                "1024"
             ]
         );
     }

@@ -75,7 +75,8 @@ pub struct Settings {
     #[serde(default)]
     pub interpolation: Method,
     /// Argument template for rendering one frame with LightCraft.
-    /// `{input}`, `{output}` and `{sets}` are substituted.
+    /// `{input}`, `{output}`, `{xmp}` (the frame's sidecar), `{bitdepth}` and
+    /// `{sets}` (`--set control=value` pairs) are substituted.
     #[serde(default = "default_lightcraft_cmd")]
     pub lightcraft_command: Vec<String>,
     /// Override the crs → LightCraft control mapping.
@@ -92,6 +93,8 @@ fn default_lightcraft_cmd() -> Vec<String> {
         "{input}",
         "-o",
         "{output}",
+        "--opt",
+        "bitDepth={bitdepth}",
         "{sets}",
     ]
     .map(String::from)
