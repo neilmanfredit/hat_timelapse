@@ -11,6 +11,11 @@ on:
 permissions:
   contents: write
 
+# Publishing a release can also report its tag being created; build once per tag.
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: ${{ matrix.target }}
