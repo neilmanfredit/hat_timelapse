@@ -9,7 +9,7 @@ tracks what is built, what is next and what still needs checking.
 | --- | --- |
 | Sequence | Folder scan in natural order; EXIF exposure and capture time (native, plus exiftool fallback) |
 | Keyframes | Automatic or manual keyframes; keyframe labels in sidecars |
-| Edits | Interpolation of 18 Camera Raw parameters, linear or monotone smooth |
+| Edits | Interpolation of 18 Camera Raw parameters, linear or monotone smooth; all other settings copied from the first keyframe; LightCraft's own settings read and kept in step |
 | Pan/zoom | Crop keyframes (Lightroom route) and Hat Timelapse motion keyframes (any route) |
 | Holy grail | EXIF-based compensation of shutter, aperture and ISO changes, with step report |
 | Deflicker | Brightness from originals or rendered previews, Gaussian smoothing, region of interest, multi-pass refinement |
@@ -36,9 +36,6 @@ tracks what is built, what is next and what still needs checking.
 - **Crop through the CLI.** Crop is a command in LightCraft (`crop.set`), not a
   slider, so the `Crop*` parameters are not passed to LightCraft. Pan and zoom
   use Hat Timelapse's own framing stage instead.
-- **Carry non-animated settings to every frame.** Edits made on keyframes that
-  Hat Timelapse does not interpolate (tone curve, HSL, lens corrections,
-  profiles) should be copied from the first keyframe to every frame.
 
 ## Next
 

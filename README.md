@@ -35,28 +35,34 @@ formats the editors already use:
 | Lightroom route | Lightroom reads the sidecars (*Metadata → Read Metadata from Files*). You export from Lightroom, then point Hat Timelapse at that folder. |
 | Compositing and editing | A numbered TIFF sequence with a `sequence.json` manifest (frame rate, size, colour space), for EffectCraft and FilmCraft. |
 
-## Requirements
+## Install
 
-- Rust 1.88 or newer to build.
-- `ffmpeg` on the PATH for video. It needs libx264, libx265, prores_ks and
-  dnxhd, plus libsvtav1 for AV1. `hat_timelapse doctor` checks which are present.
-- `lightcraft-cli` on the PATH for the LightCraft route. Tested with
-  LightCraft 0.20.0. On macOS it is a separate download from the app: get
-  `lightcraft-cli-<version>-macos-universal.zip` from the LightCraft releases
-  page (matching your app's version), or build it with
-  `cargo build --release -p lightcraft-cli`. Put the program itself, not the
-  folder it comes in, in `~/bin` and add `~/bin` to your PATH.
-- `exiftool` (optional). It reads metadata from CR3, RAF and other raws that
-  are not TIFF-based. DNG, CR2, NEF, ARW, ORF, PEF, RW2, JPEG and TIFF are read
-  natively.
+**macOS and Linux**: in Terminal, run:
 
 ```bash
-cargo build --release
+curl -fsSL https://raw.githubusercontent.com/neilmanfredit/hat_timelapse/main/install.sh | sh
 ```
 
-The binary is `target/release/hat_timelapse`.
+**Windows**: download the `.zip` from the
+[latest release](https://github.com/neilmanfredit/hat_timelapse/releases/latest)
+and put `hat_timelapse.exe` on your PATH.
 
-## Quick start: LightCraft
+You also need LightCraft's command-line tool (`lightcraft-cli`), ffmpeg and
+exiftool. On macOS, LightCraft's command-line tool is a **separate download**
+from the app. Then check everything with `hat_timelapse doctor`.
+
+**Full steps for each system: [docs/INSTALL.md](docs/INSTALL.md).**
+
+## Documentation
+
+- **[Installation guide](docs/INSTALL.md)**: macOS, Linux, Windows,
+  troubleshooting.
+- **[User guide](docs/USER_GUIDE.md)**: step by step from the memory card to a
+  finished video, with recipes for day-to-night, HDR and construction
+  sequences.
+- **[Roadmap](docs/ROADMAP.md)**: what's built and what's next.
+
+## Quick start
 
 ```bash
 cd ~/Timelapses/sunset-2026-11-08
@@ -65,24 +71,20 @@ hat_timelapse keyframes label           # label keyframes so they stand out in t
 hat_timelapse holy-grail                # compensate shutter/aperture/ISO changes
 ```
 
-Open the keyframe images in LightCraft. Edit them and make sure sidecars are
-written. Then run:
+Edit the keyframes in LightCraft or Lightroom, set the overall look on the
+first keyframe, and save metadata to file (⌘S). Then:
 
 ```bash
 hat_timelapse interpolate               # spread the keyframe edits across all frames
 hat_timelapse deflicker                 # remove remaining flicker
 hat_timelapse render                    # develop every frame with LightCraft
 hat_timelapse video --size 4k --codec h264
-hat_timelapse video --size 4k --codec prores422-hq
 hat_timelapse export --size 4k          # TIFF sequence for EffectCraft / FilmCraft
 ```
 
-## Quick start: Lightroom
-
-The steps are the same up to `deflicker`. After each Hat Timelapse step, select all
-frames in Lightroom and run *Metadata → Read Metadata from Files*. Then export
-the sequence from Lightroom to a folder, in TIFF or high-quality JPEG, keeping
-the original file names:
+**With Lightroom**, read the metadata back into Lightroom (*Metadata → Read
+Metadata from Files*), export 16-bit sRGB TIFFs with the original file names,
+and point the video step at that folder:
 
 ```bash
 hat_timelapse video --from ~/Exports/sunset --size 4k --codec hevc
@@ -118,6 +120,12 @@ Saturation, and the crop rectangle and angle. Lightroom uses the crop values
 for pan and zoom. Exposure carries Hat Timelapse's holy-grail and deflicker offsets
 on top of your edit. When keyframes are read again, those offsets are removed
 first, so re-running a step never moves your own values.
+
+Everything else you set on the **first keyframe** (profile, tone curve, colour
+mixer, detail, lens corrections, masks) is copied to every frame. Keyframes
+edited in LightCraft are read from LightCraft's own settings (`lc:settings`),
+and every frame's LightCraft settings are kept in step, so LightCraft and
+Lightroom see the same edits.
 
 The mapping from Camera Raw names to LightCraft controls is in
 `crates/hat_timelapse_core/src/params.rs`. You can override it per project under
@@ -222,7 +230,9 @@ sequences.
 
 ## Status
 
-Version 0.1, command line only. The full pipeline runs end to end and is
+Version 0.1, command line only. Downloads for macOS (universal), Linux
+(x86_64, aarch64) and Windows are on the
+[releases page](https://github.com/neilmanfredit/hat_timelapse/releases). The full pipeline runs end to end and is
 tested on Linux. CI builds and tests on Linux, macOS and Windows. LightCraft
 rendering was confirmed with LightCraft 0.20.0 on macOS with Canon EOS R CR3
 files: full-resolution 16-bit and 32-bit float TIFF, with exposure and white

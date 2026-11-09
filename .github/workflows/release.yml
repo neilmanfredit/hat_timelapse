@@ -1,0 +1,92 @@
+name: Release
+
+# Push a tag such as v0.1.0 to build every platform and publish a release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: macos-universal
+          - os: ubuntu-22.04
+            target: linux-x86_64
+          - os: ubuntu-22.04-arm
+            target: linux-aarch64
+          - os: windows-latest
+            target: windows-x86_64
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target == 'macos-universal' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: |
+          mkdir -p out
+          if [ "${{ matrix.target }}" = "macos-universal" ]; then
+            export MACOSX_DEPLOYMENT_TARGET=11.0
+            cargo build --release --locked -p hat_timelapse_cli --target aarch64-apple-darwin
+            cargo build --release --locked -p hat_timelapse_cli --target x86_64-apple-darwin
+            lipo -create -output out/hat_timelapse \
+              target/aarch64-apple-darwin/release/hat_timelapse \
+              target/x86_64-apple-darwin/release/hat_timelapse
+          else
+            cargo build --release --locked -p hat_timelapse_cli
+            cp target/release/hat_timelapse* out/ 2>/dev/null || true
+            rm -f out/*.d out/*.pdb
+          fi
+          ls -l out
+
+      - name: Smoke test
+        run: |
+          if [ "${{ matrix.target }}" = "windows-x86_64" ]; then ./out/hat_timelapse.exe --version; else ./out/hat_timelapse --version; fi
+
+      - name: Package
+        run: |
+          name="hat_timelapse-${GITHUB_REF_NAME}-${{ matrix.target }}"
+          mkdir -p "pkg/$name" dist
+          cp out/* "pkg/$name/"
+          cp README.md LICENSE-MIT LICENSE-APACHE docs/INSTALL.md docs/USER_GUIDE.md "pkg/$name/"
+          cd pkg
+          if [ "${{ matrix.target }}" = "windows-x86_64" ]; then
+            7z a -tzip "../dist/$name.zip" "$name" > /dev/null
+          else
+            tar -czf "../dist/$name.tar.gz" "$name"
+          fi
+          ls -l ../dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: dist/*
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: cd dist && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: Hat Timelapse ${{ github.ref_name }}
+          body_path: docs/RELEASE_NOTES.md
+          files: dist/*
