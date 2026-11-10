@@ -18,17 +18,24 @@ Commands are typed in Terminal (macOS), a shell (Linux) or PowerShell
 ![The Hat Timelapse app](images/app.png)
 
 - **Open a sequence folder**, then **Create project**.
-- The **numbered steps** across the top follow the workflow. A gold tick marks
-  a step that has been done.
-- The **table** lists every frame: keyframes (◆), whether it's included (✔),
+- The **numbered steps** across the top follow the workflow. The step in
+  solid gold is the suggested next one; a tick marks a step that's done.
+  Badges show progress, such as **2 Edit keyframes · 3/10** or **3 Holy
+  grail · 2 changes**.
+- The **table** lists every frame: keyframes, whether it's included (✔),
   capture details, and the holy-grail, deflicker and final exposure values.
-  Click ◆ or ✔ to change them.
+  Keyframes show ◇ until edited, gold ◆ once applied, and blue ◆ when edited
+  since the last **Apply edits**. Click a marker to change it.
 - The **preview** shows the selected frame. The gold box is the video framing,
   including any pan and zoom. Tick **Developed** to see a developed preview
   once you have rendered previews.
-- The **graph** shows exposure and brightness across the sequence. *Brightness:
-  result* should be smooth where *Brightness: original* flickers. Click or drag
-  on the graph to move through the frames; keyframes are gold lines.
+- The **graph** shows *Camera exposure* (dashed: changes you made on the camera,
+  which Holy grail cancels), the exposure Hat Timelapse writes, and brightness.
+  *Brightness: result* should be smooth where *Brightness: original*
+  flickers. Click or drag on the graph to move through the frames; keyframes
+  are gold lines.
+- After a step that updates the frames, a **reminder** tells you to re-read
+  them in your editor (Read Metadata from Files) before editing again.
 - **Messages** (bottom right) shows what each step reported. A progress bar and
   **Cancel** appear while a step runs.
 - Keys: **↑ ↓** move between frames, **K** toggles a keyframe, **X** leaves a
@@ -37,20 +44,24 @@ Commands are typed in Terminal (macOS), a shell (Linux) or PowerShell
 | Guide section | In the app |
 | --- | --- |
 | 3. Create the project | **Create project** after opening a folder |
-| 4. Choose keyframes | **1 Keyframes ▾**: evenly spaced, toggle the selected frame, **Label keyframes for my editor** |
-| 5. Holy grail | **2 Holy grail ▾** |
-| 7. Spread the edits | **3 Read keyframes ▾** |
-| 8. Remove flicker | **4 Deflicker**: fast, or with developed previews (several passes) |
-| 9. Develop every frame | **5 Render ▾**: 16-bit or 32-bit float, or previews only |
+| 4. Choose keyframes | **1 Keyframes ▾** |
+| 6. Edit the keyframes | **2 Edit keyframes ▾**: choose Lightroom or LightCraft for step-by-step instructions, **Label keyframes**, and a count of saved keyframes that updates when you come back from your editor |
+| 5. Holy grail | **3 Holy grail ▾** (says "not needed" if the camera settings never changed) |
+| 7. Spread the edits | **4 Apply edits ▾** |
+| 8. Remove flicker | **5 Deflicker**: fast, or with developed previews (several passes) |
+| 9. Develop every frame | **6 Develop ▾**: render with LightCraft, or choose your Lightroom export folder |
 | 10. Pan and zoom | **Tools → Pan & zoom…**: add a key at the selected frame |
-| 11. Make the video | **6 Video**; for a Lightroom export, use **Developed frames → Lightroom export…** |
-| 12. Export for EffectCraft or FilmCraft | **7 TIFF export** |
+| 11. Make the video | **7 Video** |
+| 12. Export for EffectCraft or FilmCraft | **8 TIFF export** |
 | 13. Long-term filters | **Tools → Long-term filters…** |
 | 14. Batch | **Tools → Batch…** |
 | Check your tools | **Tools → Check tools** |
 
+The steps can be taken in any order without losing edits: Holy grail and
+Deflicker always re-read your keyframes first.
+
 Editing the keyframes (section 6) still happens in LightCraft or Lightroom.
-After **3 Read keyframes**, use *Read Metadata from File* in your editor to see
+After **4 Apply edits**, use *Read Metadata from Files* in your editor to see
 the result there.
 
 ## Contents

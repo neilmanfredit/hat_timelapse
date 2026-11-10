@@ -147,6 +147,7 @@ pub fn holy_grail(dir: &Path, reference: usize, threshold: f64) -> Result<()> {
         "compensation range {:+.2} .. {:+.2} EV",
         r.min_offset, r.max_offset
     );
+    apply_keyframes(&mut p)?;
     write_sidecars(&mut p)?;
     p.save()
 }
@@ -157,9 +158,50 @@ pub fn interpolate(dir: &Path, method: Option<Method>) -> Result<()> {
     if let Some(m) = method {
         p.settings.interpolation = m;
     }
+    if p.keyframe_indices().is_empty() {
+        bail!("no keyframes marked (use `hat_timelapse keyframes auto 3`)");
+    }
+    apply_keyframes(&mut p)?;
+    write_sidecars(&mut p)?;
+    p.save()
+}
+
+/// The user's own exposure on a keyframe, from what the editor saved (`v`).
+///
+/// Hat Timelapse writes exposure as the user's value plus its holy-grail and
+/// deflicker offsets. Normally the editor re-reads that before the user edits
+/// again, so the offset is subtracted. If the editor saved without re-reading
+/// (Lightroom's Save Metadata on a stale catalogue), it writes back the user's
+/// previous value unchanged; that case is recognised and not double-counted.
+pub fn keyframe_user_exposure(f: &Frame, v: f64) -> f64 {
+    const SAME: f64 = 0.006; // half of the 0.01 EV the editors round to
+    let previous = f.values.get(EXPOSURE).copied();
+    match (f.written_exposure, previous) {
+        (Some(w), Some(u)) if (v - w).abs() < SAME => u, // untouched since we wrote it
+        (Some(w), _) if (v - w).abs() < SAME => v - f.applied_offset_ev,
+        (Some(_), Some(u)) if (v - u).abs() < SAME && f.applied_offset_ev.abs() >= SAME => u, // stale save
+        _ => v - f.applied_offset_ev,
+    }
+}
+
+/// Read every keyframe's edits from its sidecar and interpolate them across
+/// all frames. Run before anything writes sidecars, so steps can be taken in
+/// any order without losing keyframe edits.
+pub fn apply_keyframes(p: &mut Project) -> Result<()> {
     let keys = p.keyframe_indices();
     if keys.is_empty() {
-        bail!("no keyframes marked (use `hat_timelapse keyframes auto 3`)");
+        return Ok(());
+    }
+    // Note which keyframes an editor has saved since Hat Timelapse last wrote them.
+    let mut newly_edited = 0;
+    for &i in &keys {
+        let path = sequence::sidecar_path(&p.frame_path(i));
+        if let Some(fp) = hat_timelapse_core::status::fingerprint_file(&path) {
+            if p.frames[i].sidecar_fp != Some(fp) {
+                p.frames[i].editor_saved = true;
+                newly_edited += 1;
+            }
+        }
     }
     let props: Vec<_> = keys
         .iter()
@@ -176,7 +218,7 @@ pub fn interpolate(dir: &Path, method: Option<Method>) -> Result<()> {
     // LightCraft prefers over the Camera Raw fields. Read those where present.
     let props: Vec<BTreeMap<String, String>> = props
         .into_iter()
-        .map(|pr| with_lightcraft_values(&p, pr))
+        .map(|pr| with_lightcraft_values(p, pr))
         .collect();
 
     let n = p.frames.len();
@@ -190,7 +232,7 @@ pub fn interpolate(dir: &Path, method: Option<Method>) -> Result<()> {
                 .get(&qn)
                 .and_then(|s| s.trim_start_matches('+').parse::<f64>().ok());
             let v = match v {
-                Some(v) if def.crs == EXPOSURE => Some(v - p.frames[i].applied_offset_ev),
+                Some(v) if def.crs == EXPOSURE => Some(keyframe_user_exposure(&p.frames[i], v)),
                 other => other,
             };
             match v.or(def.default) {
@@ -219,13 +261,11 @@ pub fn interpolate(dir: &Path, method: Option<Method>) -> Result<()> {
         animated.push(def.crs);
     }
     println!(
-        "interpolated {} parameters across {n} frames from {} keyframes: {animated:?}",
-        animated.len(),
+        "applied edits from {} keyframes ({newly_edited} saved since last time) to {n} frames: {animated:?}",
         keys.len()
     );
-    p.shared = shared_settings(&p, &keys, &animated)?;
-    write_sidecars(&mut p)?;
-    p.save()
+    p.shared = shared_settings(p, &keys, &animated)?;
+    Ok(())
 }
 
 /// LightCraft control path for a parameter, honouring project overrides.
@@ -458,8 +498,13 @@ pub fn write_sidecars(p: &mut Project) -> Result<()> {
     edits
         .par_iter()
         .try_for_each(|(path, e, _)| hat_timelapse_xmp::update_file(path, e))?;
-    for (f, (_, _, off)) in p.frames.iter_mut().zip(&edits) {
+    for (f, (path, e, off)) in p.frames.iter_mut().zip(&edits) {
         f.applied_offset_ev = *off;
+        f.written_exposure = e
+            .set
+            .get(&format!("crs:{EXPOSURE}"))
+            .and_then(|v| v.trim_start_matches('+').parse().ok());
+        f.sidecar_fp = hat_timelapse_core::status::fingerprint_file(path);
     }
     let c = clamped.into_inner();
     if c > 0 {
@@ -504,6 +549,8 @@ pub fn ensure_luminance(p: &mut Project, roi: Option<Roi>) -> Result<()> {
 
 pub fn deflicker(dir: &Path, a: &DeflickerArgs) -> Result<()> {
     let mut p = load(dir)?;
+    // Measure against the latest keyframe edits.
+    apply_keyframes(&mut p)?;
     if a.reset {
         for f in &mut p.frames {
             f.deflicker_ev = 0.0;

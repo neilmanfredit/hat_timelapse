@@ -20,6 +20,8 @@ pub enum Msg {
 
 pub struct Job {
     pub label: String,
+    /// The step rewrites the frames' sidecars, so the editor must re-read them.
+    pub writes_sidecars: bool,
     pub progress: Option<(usize, usize)>,
     pub finished: Option<bool>,
     rx: Receiver<Msg>,
@@ -140,8 +142,14 @@ impl Job {
                 let _ = tx.send(Msg::Finished(false));
             }
         }
+        let writes_sidecars = match args.first().map(String::as_str) {
+            Some("holy-grail" | "interpolate" | "deflicker" | "write") => true,
+            Some("keyframes") => args.get(1).map(String::as_str) == Some("label"),
+            _ => false,
+        };
         Job {
             label: label.to_string(),
+            writes_sidecars,
             progress: None,
             finished: None,
             rx,

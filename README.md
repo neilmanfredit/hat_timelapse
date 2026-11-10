@@ -77,13 +77,23 @@ from the app. Then check everything with `hat_timelapse doctor`.
 
 1. Open **Hat Timelapse** and choose **Open a sequence folder…**, then
    **Create project**.
-2. Work along the numbered steps at the top: **1 Keyframes**, then edit the
-   keyframes in LightCraft or Lightroom, then **2 Holy grail** (if you changed
-   exposure while shooting), **3 Read keyframes**, **4 Deflicker**,
-   **5 Render** and **6 Video**.
-3. The table lists every frame. The preview shows the selected frame with the
-   video framing in gold. The graph shows exposure and brightness across the
-   sequence; click or drag on it to move through the frames.
+2. Work along the numbered steps at the top. The step in solid gold is the
+   suggested next one:
+   **1 Keyframes** → **2 Edit keyframes** (in Lightroom or LightCraft; the step
+   shows how many are saved) → **3 Holy grail** (shows how many camera
+   exposure changes it found, or "not needed") → **4 Apply edits** →
+   **5 Deflicker** → **6 Develop** (LightCraft render or your Lightroom
+   export) → **7 Video** or **8 TIFF export**.
+3. The table lists every frame. Keyframes show ◇ until edited, gold ◆ once
+   applied, and blue ◆ when edited since the last Apply edits. The preview
+   shows the selected frame with the video framing in gold. The graph shows
+   camera exposure changes, exposure and brightness; click or drag on it to
+   move through the frames.
+4. After a step that updates the frames, a reminder tells you to re-read them
+   in your editor before editing again.
+
+Steps can be run in any order: Holy grail and Deflicker always pick up your
+latest keyframe edits first.
 
 Keys: ↑ ↓ move between frames, **K** toggles a keyframe, **X** leaves a frame
 out. **Tools** holds long-term filters, pan and zoom, and batch.

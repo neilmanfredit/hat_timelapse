@@ -14,5 +14,6 @@ pub mod luminance;
 pub mod params;
 pub mod project;
 pub mod sequence;
+pub mod status;
 
 pub use project::{Frame, MotionKey, Project, Settings};

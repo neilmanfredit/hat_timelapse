@@ -1,6 +1,24 @@
 ## What's in this release
 
-**New in 0.2: the Hat Timelapse desktop app.** Open a sequence folder and work
+**New in 0.3**
+- **Fixed: keyframe edits could be lost.** Running Holy grail or Deflicker
+  after editing keyframes, but before applying the edits, overwrote the
+  keyframes' exposure. Every step now re-reads your keyframes first, so steps
+  can be taken in any order.
+- **Stale editor saves are recognised.** If Lightroom saves a keyframe without
+  first re-reading Hat Timelapse's changes, the corrections are no longer
+  counted twice.
+- **Clearer workflow in the app:** a new **2 Edit keyframes** step with
+  instructions for Lightroom or LightCraft and a live count of saved
+  keyframes; **4 Apply edits** (previously Read keyframes); a single
+  **6 Develop** step for LightCraft or a Lightroom export; the suggested next
+  step in solid gold; **Holy grail** says how many camera exposure changes it
+  found, or that it isn't needed; a dashed camera-exposure line on the graph;
+  keyframe markers showing edit status; and a reminder to re-read the frames
+  in your editor after each step.
+- TIFF export now uses the chosen Lightroom export folder.
+
+**From 0.2: the Hat Timelapse desktop app.** Open a sequence folder and work
 through numbered steps, with a frame table, a preview showing the video
 framing, and a graph of exposure and brightness you can click to move through
 the frames. Rendering and encoding show progress and can be cancelled. On

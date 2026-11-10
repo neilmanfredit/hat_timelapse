@@ -8,6 +8,7 @@ use egui_extras::{Column, TableBuilder};
 use hat_timelapse_core::params::EXPOSURE;
 use hat_timelapse_core::project::{Project, WORK_DIR};
 use hat_timelapse_core::sequence;
+use hat_timelapse_core::status::{self, KeyStatus};
 use hat_timelapse_render::framing::{self, Size};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
@@ -163,6 +164,8 @@ struct Prefs {
     filters: FilterOpts,
     batch: BatchOpts,
     show_developed: bool,
+    /// Which editor the instructions are written for.
+    lightcraft: bool,
 }
 
 impl Default for Prefs {
@@ -180,6 +183,7 @@ impl Default for Prefs {
             filters: FilterOpts::default(),
             batch: BatchOpts::default(),
             show_developed: false,
+            lightcraft: false,
         }
     }
 }
@@ -219,6 +223,15 @@ const COLOURS: &[(&str, &str)] = &[
     ("linear", "Linear float (TIFF only)"),
 ];
 
+#[cfg(target_os = "macos")]
+const SAVE_LR: &str = "Select the keyframes → Metadata → Save Metadata to File (⌘S).";
+#[cfg(not(target_os = "macos"))]
+const SAVE_LR: &str = "Select the keyframes → Metadata → Save Metadata to File (Ctrl+S).";
+#[cfg(target_os = "macos")]
+const SAVE_LC: &str = "Make sure they're saved: Photo → Save Metadata to File (⌘S).";
+#[cfg(not(target_os = "macos"))]
+const SAVE_LC: &str = "Make sure they're saved: Photo → Save Metadata to File (Ctrl+S).";
+
 const WEEKDAYS: [&str; 7] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 // ---------------------------------------------------------------- app
@@ -255,6 +268,12 @@ pub struct HatApp {
     preview: Preview,
     win: Windows,
     motion: [f64; 3],
+    /// Cached step status; refreshed after steps, on returning to the app and every few seconds.
+    st: StepState,
+    st_at: f64,
+    was_focused: bool,
+    /// Show the "re-read in your editor" reminder.
+    reminder: bool,
 }
 
 impl HatApp {
@@ -278,6 +297,10 @@ impl HatApp {
             preview: Preview::new(&cc.egui_ctx),
             win: Windows::default(),
             motion: [1.0, 0.5, 0.5],
+            st: StepState::default(),
+            st_at: f64::NEG_INFINITY,
+            was_focused: true,
+            reminder: false,
         };
         // A folder given on the command line (or dropped on the app icon) opens straight away.
         if let Some(arg) = std::env::args_os()
@@ -308,6 +331,7 @@ impl HatApp {
                 Ok(p) => {
                     self.selected = self.selected.min(p.frames.len().saturating_sub(1));
                     self.project = Some(p);
+                    self.st_at = f64::NEG_INFINITY; // refresh status
                 }
                 Err(e) => {
                     self.project = None;
@@ -346,9 +370,13 @@ impl HatApp {
             self.log.extend(job.poll());
             if let Some(ok) = job.finished {
                 let label = job.label.clone();
+                let writes = job.writes_sidecars;
                 self.job = None;
                 if ok {
                     self.log.push(format!("✔ {label} finished"));
+                    if writes {
+                        self.reminder = true;
+                    }
                 } else {
                     self.log
                         .push(format!("✖ {label} did not finish; see the messages above"));
@@ -378,6 +406,26 @@ impl HatApp {
         if self.log.len() > 4000 {
             self.log.drain(0..1000);
         }
+    }
+
+    /// Keep step badges current without re-reading the folder on every frame:
+    /// refresh after steps, when the window regains focus (back from the
+    /// editor), and every few seconds.
+    fn refresh_status(&mut self, ctx: &egui::Context) {
+        let Some(p) = &self.project else { return };
+        let now = ctx.input(|i| i.time);
+        let focused = ctx.input(|i| i.viewport().focused.unwrap_or(true));
+        let regained = focused && !self.was_focused;
+        self.was_focused = focused;
+        if regained || now - self.st_at > 3.0 {
+            self.st = StepState::of(
+                p,
+                self.prefs.holy_threshold,
+                self.prefs.video.from.as_deref(),
+            );
+            self.st_at = now;
+        }
+        ctx.request_repaint_after(std::time::Duration::from_secs(3));
     }
 
     fn save_project(&mut self) {
@@ -419,6 +467,7 @@ impl eframe::App for HatApp {
             ctx.request_repaint_after(std::time::Duration::from_millis(200));
         }
         self.keyboard(&ctx);
+        self.refresh_status(&ctx);
 
         egui::Panel::top("top")
             .frame(bar_frame())
@@ -615,19 +664,23 @@ impl HatApp {
         if self.project.is_some() {
             ui.add_space(4.0);
             ui.horizontal_wrapped(|ui| self.steps(ui));
+            self.reminder_bar(ui);
         }
     }
 
     fn steps(&mut self, ui: &mut egui::Ui) {
         let busy = self.busy();
-        let st = self.project.as_ref().map(StepState::of).unwrap_or_default();
+        let st = self.st.clone();
         let n = self.project.as_ref().map(|p| p.frames.len()).unwrap_or(0);
+        let next = st.next_step();
+        let lr = !self.prefs.lightcraft;
+        let editor = if lr { "Lightroom" } else { "LightCraft" };
 
         ui.add_enabled_ui(!busy, |ui| {
             // 1 Keyframes
-            step_menu(ui, 1, "Keyframes", st.keyframes > 0, &format!("{}", st.keyframes), |ui| {
-                theme::eyebrow(ui, "Keyframes");
-                ui.label("Frames you edit by hand. Use more where the light changes quickly.");
+            step_menu(ui, 1, "Keyframes", st.keyframes > 0, &st.keyframes.to_string(), next == 1, |ui| {
+                theme::eyebrow(ui, "1 · Keyframes");
+                ui.label("The frames you'll edit by hand. Use more where the light changes quickly, such as around sunset.");
                 ui.horizontal(|ui| {
                     ui.label("Evenly spaced:");
                     ui.add(egui::DragValue::new(&mut self.prefs.keyframes).range(1..=n.max(1)));
@@ -637,34 +690,105 @@ impl HatApp {
                         ui.close();
                     }
                 });
-                if ui.button(format!("Toggle frame {} as keyframe   (K)", self.selected)).clicked() {
+                if ui.button(format!("Toggle frame {} as a keyframe   (K)", self.selected)).clicked() {
                     let i = self.selected;
                     if let Some(p) = &mut self.project {
                         p.frames[i].keyframe = !p.frames[i].keyframe;
                     }
                     self.save_project();
+                    self.st_at = f64::NEG_INFINITY;
                     ui.close();
                 }
-                ui.separator();
-                if ui.add(theme::primary("Label keyframes for my editor")).clicked() {
+                ui.label(RichText::new("When the keyframes are right, go to 2 · Edit keyframes.").color(TEXT_DIM).small());
+            });
+
+            // 2 Edit keyframes (in Lightroom or LightCraft)
+            let edited = st.applied + st.changed;
+            let badge = if st.changed > 0 {
+                format!("{edited}/{} · {} new", st.keyframes, st.changed)
+            } else {
+                format!("{edited}/{}", st.keyframes)
+            };
+            step_menu(ui, 2, "Edit keyframes", edited > 0 && edited == st.keyframes, &badge, next == 2, |ui| {
+                ui.set_min_width(380.0);
+                theme::eyebrow(ui, "2 · Edit keyframes");
+                ui.horizontal(|ui| {
+                    ui.label("I edit in");
+                    ui.radio_value(&mut self.prefs.lightcraft, false, "Lightroom");
+                    ui.radio_value(&mut self.prefs.lightcraft, true, "LightCraft");
+                });
+                ui.add_space(4.0);
+                let status = if st.keyframes == 0 {
+                    "No keyframes yet.".to_string()
+                } else {
+                    format!(
+                        "{edited} of {} keyframes saved from {editor}{}.",
+                        st.keyframes,
+                        if st.changed > 0 { format!(", {} with changes not yet applied", st.changed) } else { String::new() }
+                    )
+                };
+                ui.label(RichText::new(status).color(if st.changed > 0 { SKY } else { theme::TEXT }));
+                ui.add_space(6.0);
+                if ui.add(theme::primary(&format!("Label keyframes for {editor}"))).on_hover_text("Marks the keyframes so you can filter for them").clicked() {
                     self.run("Label keyframes", &["keyframes", "label"]);
                     ui.close();
                 }
-                ui.label(
-                    RichText::new(
-                        "Then edit the keyframes in LightCraft or Lightroom and save metadata to file (⌘S). \
-                         Set the overall look on the first keyframe.",
-                    )
-                    .color(TEXT_DIM)
-                    .small(),
-                );
+                ui.add_space(6.0);
+                let steps: &[&str] = if lr {
+                    &[
+                        "Import the folder with Add (or select all → Metadata → Read Metadata from Files).",
+                        "Library filter → Attribute → colour label → Custom Label shows only the keyframes.",
+                        "Edit the first keyframe for the overall look (profile, lens corrections, colour, detail).",
+                        "With the first keyframe active, select all keyframes and Sync Settings.",
+                        "Adjust each keyframe for what changes over time: exposure, white balance, highlights, shadows.",
+                        SAVE_LR,
+                    ]
+                } else {
+                    &[
+                        "Settings → Import: tick Automatically write changes into XMP sidecars.",
+                        "File → Import → Add in place (or select all → Photo → Read Metadata from File).",
+                        "Edit the first keyframe for the overall look (profile, lens corrections, colour, detail).",
+                        "Adjust each keyframe for what changes over time: exposure, white balance, highlights, shadows.",
+                        SAVE_LC,
+                    ]
+                };
+                for (k, t) in steps.iter().enumerate() {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(RichText::new(format!("{}.", k + 1)).color(GOLD));
+                        ui.label(*t);
+                    });
+                }
+                ui.add_space(4.0);
+                ui.label(RichText::new("Then come back here: the counts update by themselves.").color(TEXT_DIM).small());
+                ui.horizontal(|ui| {
+                    if ui.button("Show folder").clicked() {
+                        if let Some(d) = &self.dir {
+                            reveal(d);
+                        }
+                    }
+                    if ui.button("Check again").clicked() {
+                        self.st_at = f64::NEG_INFINITY;
+                    }
+                });
             });
 
-            // 2 Holy grail
-            step_menu(ui, 2, "Holy grail", st.holy_grail, "", |ui| {
-                theme::eyebrow(ui, "Holy grail");
-                ui.label("Cancels the brightness jumps from shutter, aperture or ISO changes during the shoot.");
-                ui.label(RichText::new("Skip this if you did not change exposure while shooting.").color(TEXT_DIM).small());
+            // 3 Holy grail
+            let hg_badge = if st.camera_changes == 0 { "not needed".to_string() } else { format!("{} changes", st.camera_changes) };
+            step_menu(ui, 3, "Holy grail", st.holy_grail, &hg_badge, next == 3, |ui| {
+                theme::eyebrow(ui, "3 · Holy grail");
+                ui.label("Cancels the brightness jumps when shutter, aperture or ISO changed during the shoot.");
+                if st.camera_changes == 0 {
+                    ui.label(RichText::new("The camera settings never changed in this sequence, so this isn't needed.").color(theme::GOOD).small());
+                } else {
+                    ui.label(
+                        RichText::new(format!(
+                            "{} exposure changes found. The green dashed line on the graph shows them.",
+                            st.camera_changes
+                        ))
+                        .color(GOLD_SOFT)
+                        .small(),
+                    );
+                }
                 ui.horizontal(|ui| {
                     ui.label("Ignore changes under");
                     ui.add(egui::DragValue::new(&mut self.prefs.holy_threshold).range(0.0..=1.0).speed(0.01).suffix(" EV"));
@@ -676,68 +800,136 @@ impl HatApp {
                 }
             });
 
-            // 3 Read keyframes
-            step_menu(ui, 3, "Read keyframes", st.interpolated, "", |ui| {
-                theme::eyebrow(ui, "Read keyframes");
-                ui.label("Reads your keyframe edits and blends them across every frame.");
+            // 4 Apply edits
+            let ap_badge = if st.changed > 0 { format!("{} new", st.changed) } else { String::new() };
+            step_menu(ui, 4, "Apply edits", st.interpolated && st.changed == 0, &ap_badge, next == 4, |ui| {
+                theme::eyebrow(ui, "4 · Apply edits");
+                ui.label("Blends your keyframe edits across every frame, and copies the first keyframe's look to all of them.");
                 ui.horizontal(|ui| {
+                    ui.label("Between keyframes:");
                     ui.radio_value(&mut self.prefs.linear, false, "Smooth");
-                    ui.radio_value(&mut self.prefs.linear, true, "Linear");
+                    ui.radio_value(&mut self.prefs.linear, true, "Straight line");
                 });
-                if ui.add(theme::primary("Read and blend keyframes")).clicked() {
+                if ui.add(theme::primary("Apply edits to all frames")).clicked() {
                     let m = if self.prefs.linear { "linear" } else { "smooth" };
-                    self.run("Read keyframes", &["interpolate", "--method", m]);
+                    self.run("Apply edits", &["interpolate", "--method", m]);
                     ui.close();
                 }
                 ui.label(
-                    RichText::new("Afterwards, use Read Metadata from File in your editor to see the result there.")
+                    RichText::new("Holy grail and Deflicker also pick up your latest keyframe edits, so the order of steps can't lose them.")
                         .color(TEXT_DIM)
                         .small(),
                 );
             });
 
-            // 4 Deflicker
-            if step_button(ui, 4, "Deflicker", st.deflickered).clicked() {
+            // 5 Deflicker
+            if step_button(ui, 5, "Deflicker", st.deflickered, next == 5).clicked() {
                 self.win.deflicker = true;
             }
 
-            // 5 Render
-            step_menu(ui, 5, "Render", st.rendered > 0, &format!("{}/{}", st.rendered, st.included), |ui| {
-                theme::eyebrow(ui, "Render with LightCraft");
-                ui.label("Develops every included frame at full resolution.");
+            // 6 Develop: LightCraft render, or a Lightroom export
+            let dev_badge = if st.exported > 0 {
+                format!("{} exported", st.exported)
+            } else {
+                format!("{}/{}", st.rendered, st.included)
+            };
+            let developed = st.exported > 0 || (st.included > 0 && st.rendered >= st.included);
+            step_menu(ui, 6, "Develop", developed, &dev_badge, next == 6, |ui| {
+                ui.set_min_width(380.0);
+                theme::eyebrow(ui, "6 · Develop every frame");
+                ui.label(RichText::new("With LightCraft").color(GOLD_SOFT).strong());
                 ui.horizontal(|ui| {
                     ui.radio_value(&mut self.prefs.bit_depth, 16, "16-bit");
                     ui.radio_value(&mut self.prefs.bit_depth, 32, "32-bit float (HDR)");
+                    ui.checkbox(&mut self.prefs.overwrite, "Redo finished frames");
                 });
-                ui.checkbox(&mut self.prefs.overwrite, "Re-render frames already done");
-                if ui.add(theme::primary("Render")).clicked() {
-                    let bd = self.prefs.bit_depth.to_string();
-                    let mut a = vec!["render", "--bit-depth", &bd];
-                    if self.prefs.overwrite {
-                        a.push("--overwrite");
+                ui.horizontal(|ui| {
+                    if ui.add(theme::primary(&format!("Render {} frames", st.included))).clicked() {
+                        let bd = self.prefs.bit_depth.to_string();
+                        let mut a = vec!["render", "--bit-depth", &bd];
+                        if self.prefs.overwrite {
+                            a.push("--overwrite");
+                        }
+                        self.run("Render", &a);
+                        self.prefs.video.from = None;
+                        self.prefs.export.from = None;
+                        ui.close();
                     }
-                    self.run("Render", &a);
-                    ui.close();
+                    if ui.button("Small previews only").on_hover_text("For Deflicker with developed previews").clicked() {
+                        self.run("Render previews", &["render", "--previews"]);
+                        ui.close();
+                    }
+                });
+                ui.separator();
+                ui.label(RichText::new("With Lightroom").color(GOLD_SOFT).strong());
+                for (k, t) in [
+                    "Select all frames → Metadata → Read Metadata from Files.",
+                    "File → Export: TIFF, 16-bit, sRGB; keep the original file names.",
+                    "Choose that export folder here.",
+                ]
+                .iter()
+                .enumerate()
+                {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(RichText::new(format!("{}.", k + 1)).color(GOLD));
+                        ui.label(*t);
+                    });
                 }
-                if ui.button("Render small previews only").clicked() {
-                    self.run("Render previews", &["render", "--previews"]);
-                    ui.close();
-                }
-                ui.label(
-                    RichText::new("Developing in Lightroom instead? Export there and use Video → Developed frames from.")
-                        .color(TEXT_DIM)
-                        .small(),
-                );
+                ui.horizontal(|ui| {
+                    if ui.button("Choose Lightroom export folder…").clicked() {
+                        if let Some(d) = rfd::FileDialog::new().set_title("Folder of frames exported from Lightroom").pick_folder() {
+                            self.prefs.video.from = Some(d.clone());
+                            self.prefs.export.from = Some(d);
+                            self.st_at = f64::NEG_INFINITY;
+                        }
+                    }
+                    if let Some(d) = &self.prefs.video.from {
+                        ui.label(RichText::new(folder_name(d)).color(TEXT_DIM));
+                        if ui.small_button("✖").on_hover_text("Use LightCraft renders instead").clicked() {
+                            self.prefs.video.from = None;
+                            self.prefs.export.from = None;
+                            self.st_at = f64::NEG_INFINITY;
+                        }
+                    }
+                });
             });
 
-            // 6 Video, 7 TIFF
-            if step_button(ui, 6, "Video", false).clicked() {
+            // 7 Video, 8 TIFF
+            if step_button(ui, 7, "Video", false, next == 7).clicked() {
                 self.win.video = true;
             }
-            if step_button(ui, 7, "TIFF export", false).clicked() {
+            if step_button(ui, 8, "TIFF export", false, false).clicked() {
                 self.win.export = true;
             }
         });
+    }
+
+    /// Shown after a step that rewrote the frames' settings.
+    fn reminder_bar(&mut self, ui: &mut egui::Ui) {
+        if self.reminder && self.project.is_some() {
+            ui.add_space(4.0);
+            egui::Frame::new()
+                .fill(Color32::from_rgb(0x1a, 0x2d, 0x5c))
+                .stroke(egui::Stroke::new(1.0, GOLD))
+                .corner_radius(6)
+                .inner_margin(egui::Margin::symmetric(10, 6))
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        theme::eyebrow(ui, "Reminder");
+                        let how = if !self.prefs.lightcraft {
+                            "in Lightroom select all frames → Metadata → Read Metadata from Files."
+                        } else {
+                            "in LightCraft select all frames → Photo → Read Metadata from File."
+                        };
+                        ui.label(format!("The frames' settings were updated. Before you look at or edit them again, {how}"));
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            if ui.small_button("Dismiss").clicked() {
+                                self.reminder = false;
+                            }
+                        });
+                    });
+                });
+        }
     }
 
     fn welcome(&mut self, ui: &mut egui::Ui) {
@@ -824,6 +1016,7 @@ impl HatApp {
             self.scroll_to_selected = false;
         }
         let selected = self.selected;
+        let key_status = &self.st.key_status;
         tb.header(24.0, |mut h| {
             for (t, tip) in [
                 ("#", "Frame number"),
@@ -867,13 +1060,30 @@ impl HatApp {
                     ui.label(txt(f.file.clone()));
                 });
                 row.col(|ui| {
-                    let t = if f.keyframe {
-                        RichText::new("◆").color(GOLD).size(15.0)
+                    let (t, tip) = if !f.keyframe {
+                        (
+                            RichText::new("◇").color(NAVY_LINE),
+                            "Not a keyframe. Click (or K) to make it one.",
+                        )
                     } else {
-                        RichText::new("◇").color(NAVY_LINE)
+                        match key_status.get(&i) {
+                            Some(KeyStatus::Applied) => (
+                                RichText::new("◆").color(GOLD).size(15.0),
+                                "Keyframe: edited and applied",
+                            ),
+                            Some(KeyStatus::Changed) => (
+                                RichText::new("◆").color(SKY).size(15.0),
+                                "Keyframe: edited since the last Apply edits",
+                            ),
+                            _ => (
+                                RichText::new("◇").color(GOLD).size(15.0),
+                                "Keyframe: not edited yet",
+                            ),
+                        }
                     };
                     if ui
                         .add_enabled(!busy, egui::Button::new(t).frame(false))
+                        .on_hover_text(tip)
                         .clicked()
                     {
                         toggle_key = Some(i);
@@ -1136,6 +1346,19 @@ impl HatApp {
         };
         let keys = p.keyframe_indices();
         let sel = self.selected;
+        // How much brighter the camera settings made each frame than frame 0
+        // (longer shutter, wider aperture or higher ISO = up).
+        let ev0 = p.frames.iter().find_map(|f| f.exif.ev());
+        let camera: Vec<[f64; 2]> = match ev0 {
+            Some(e0) => p
+                .frames
+                .iter()
+                .enumerate()
+                .filter_map(|(i, f)| Some([i as f64, e0 - f.exif.ev()?]))
+                .collect(),
+            None => Vec::new(),
+        };
+        let camera_changes = camera.windows(2).any(|w| (w[1][1] - w[0][1]).abs() > 1e-6);
 
         let resp = Plot::new("curves")
             .legend(Legend::default().position(Corner::LeftTop))
@@ -1147,6 +1370,14 @@ impl HatApp {
             .include_y(-1.0)
             .include_y(1.0)
             .show(ui, |pu| {
+                if camera_changes {
+                    pu.line(
+                        Line::new("Camera exposure", PlotPoints::from(camera))
+                            .color(theme::GOOD)
+                            .style(egui_plot::LineStyle::dashed_loose())
+                            .width(1.5),
+                    );
+                }
                 if !measured.is_empty() {
                     pu.line(
                         Line::new("Brightness: original", PlotPoints::from(measured))
@@ -1166,7 +1397,7 @@ impl HatApp {
                 );
                 pu.line(
                     Line::new("Holy grail", PlotPoints::from(holy))
-                        .color(theme::GOOD)
+                        .color(Color32::from_rgb(0xb4, 0x8c, 0xff))
                         .width(1.0),
                 );
                 pu.line(
@@ -1542,6 +1773,9 @@ impl HatApp {
                     "--colour".into(),
                     o.colour.clone(),
                 ];
+                if let Some(f) = &o.from {
+                    a.extend(["--from".into(), f.display().to_string()]);
+                }
                 if let Some(f) = &o.out {
                     a.extend(["--out".into(), f.display().to_string()]);
                 }
@@ -1712,14 +1946,14 @@ impl HatApp {
         let mut open = self.win.help;
         centred(egui::Window::new("How it works"), ctx).open(&mut open).default_width(560.0).show(ctx, |ui| {
             for (n, t, d) in [
-                ("1", "Keyframes", "Choose the frames you'll edit by hand, then label them so your editor can find them."),
-                ("", "Edit", "In LightCraft or Lightroom: set the overall look on the first keyframe and adjust the others for what changes over time. Save metadata to file (⌘S)."),
-                ("2", "Holy grail", "If you changed shutter, aperture or ISO during the shoot, this cancels the jumps."),
-                ("3", "Read keyframes", "Blends your keyframe edits across every frame and copies the first keyframe's look to all of them."),
-                ("4", "Deflicker", "Evens out remaining flicker. The graph shows the original and resulting brightness."),
-                ("5", "Render", "Develops every frame with LightCraft. Developing in Lightroom? Export there instead."),
-                ("6", "Video", "H.264, HEVC, AV1, ProRes or DNxHR, up to 8K and beyond, SDR or HDR."),
-                ("7", "TIFF export", "A frame sequence for EffectCraft, FilmCraft or another editor."),
+                ("1", "Keyframes", "Choose the frames you'll edit by hand."),
+                ("2", "Edit keyframes", "In Lightroom or LightCraft: set the overall look on the first keyframe, adjust the others for what changes over time, and save metadata to file. The step shows how many keyframes are saved."),
+                ("3", "Holy grail", "Only if shutter, aperture or ISO changed during the shoot: the step shows how many changes it found. Cancels the jumps."),
+                ("4", "Apply edits", "Blends your keyframe edits across every frame and copies the first keyframe's look to all of them."),
+                ("5", "Deflicker", "Evens out remaining flicker. The graph shows the original and resulting brightness."),
+                ("6", "Develop", "Render every frame with LightCraft, or choose the folder you exported from Lightroom."),
+                ("7", "Video", "H.264, HEVC, AV1, ProRes or DNxHR, up to 8K and beyond, SDR or HDR."),
+                ("8", "TIFF export", "A frame sequence for EffectCraft, FilmCraft or another editor."),
             ] {
                 ui.horizontal_wrapped(|ui| {
                     ui.label(RichText::new(format!("{n:>2}")).color(GOLD).strong());
@@ -1728,6 +1962,8 @@ impl HatApp {
                 });
             }
             ui.separator();
+            ui.label("The step in solid gold is the suggested next one. After a step that updates the frames, re-read them in your editor before editing again (a reminder appears).");
+            ui.label("Keyframe markers: ◇ not edited yet · gold ◆ edited and applied · blue ◆ edited since the last Apply edits.");
             ui.label("Keys: ↑ ↓ move between frames · K toggles keyframe · X leaves a frame out. Click or drag on the graph to jump to a frame.");
             ui.hyperlink_to("Full user guide", "https://github.com/neilmanfredit/hat_timelapse/blob/main/docs/USER_GUIDE.md");
         });
@@ -1737,54 +1973,104 @@ impl HatApp {
 
 // ---------------------------------------------------------------- helpers
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct StepState {
     keyframes: usize,
+    applied: usize,
+    changed: usize,
+    key_status: std::collections::HashMap<usize, KeyStatus>,
+    camera_changes: usize,
     holy_grail: bool,
     interpolated: bool,
     deflickered: bool,
     rendered: usize,
+    exported: usize,
     included: usize,
 }
 
 impl StepState {
-    fn of(p: &Project) -> StepState {
-        let rendered_dir = p.dir.join(WORK_DIR).join("rendered");
-        let rendered = std::fs::read_dir(&rendered_dir)
-            .map(|d| {
-                d.filter_map(|e| e.ok())
-                    .filter(|e| sequence::is_image(&e.path()))
-                    .count()
-            })
-            .unwrap_or(0);
+    fn of(p: &Project, threshold: f64, export: Option<&Path>) -> StepState {
+        let count_images = |d: &Path| {
+            std::fs::read_dir(d)
+                .map(|d| {
+                    d.filter_map(|e| e.ok())
+                        .filter(|e| sequence::is_image(&e.path()))
+                        .count()
+                })
+                .unwrap_or(0)
+        };
+        let mut key_status = std::collections::HashMap::new();
+        let (mut applied, mut changed) = (0, 0);
+        for i in p.keyframe_indices() {
+            let k = status::keyframe_status(p, i);
+            match k {
+                KeyStatus::Applied => applied += 1,
+                KeyStatus::Changed => changed += 1,
+                KeyStatus::NotEdited => {}
+            }
+            key_status.insert(i, k);
+        }
+        let evs: Vec<f64> = p.frames.iter().filter_map(|f| f.exif.ev()).collect();
+        let camera_changes = evs
+            .windows(2)
+            .filter(|w| (w[1] - w[0]).abs() >= threshold.max(0.01))
+            .count();
         StepState {
             keyframes: p.keyframe_indices().len(),
+            applied,
+            changed,
+            key_status,
+            camera_changes,
             holy_grail: p.frames.iter().any(|f| f.holy_grail_ev != 0.0),
             interpolated: p.frames.first().is_some_and(|f| !f.values.is_empty()),
             deflickered: p.frames.iter().any(|f| f.deflicker_ev != 0.0),
-            rendered,
+            rendered: count_images(&p.dir.join(WORK_DIR).join("rendered")),
+            exported: export.map(count_images).unwrap_or(0),
             included: p.included_indices().len(),
+        }
+    }
+
+    /// The step to suggest next (1–7).
+    fn next_step(&self) -> usize {
+        if self.keyframes == 0 {
+            1
+        } else if self.applied + self.changed < self.keyframes {
+            2
+        } else if self.camera_changes > 0 && !self.holy_grail {
+            3
+        } else if self.changed > 0 || !self.interpolated {
+            4
+        } else if !self.deflickered {
+            5
+        } else if self.exported == 0 && self.rendered < self.included {
+            6
+        } else {
+            7
         }
     }
 }
 
-fn step_label(n: usize, name: &str, done: bool, extra: &str) -> RichText {
+fn step_label(n: usize, name: &str, done: bool, extra: &str, next: bool) -> RichText {
     let tick = if done { "✔ " } else { "" };
     let extra = if extra.is_empty() {
         String::new()
     } else {
-        format!("  {extra}")
+        format!("  ·  {extra}")
     };
     let t = RichText::new(format!("{n}  {tick}{name}{extra}"));
-    if done {
+    if next {
+        t.color(theme::NAVY).strong()
+    } else if done {
         t.color(GOLD_SOFT)
     } else {
         t
     }
 }
 
-fn step_button(ui: &mut egui::Ui, n: usize, name: &str, done: bool) -> egui::Response {
-    ui.button(step_label(n, name, done, ""))
+fn step_button(ui: &mut egui::Ui, n: usize, name: &str, done: bool, next: bool) -> egui::Response {
+    let b = egui::Button::new(step_label(n, name, done, "", next));
+    ui.add(if next { b.fill(GOLD) } else { b })
+        .on_hover_text(if next { "Suggested next step" } else { "" })
 }
 
 fn step_menu(
@@ -1793,10 +2079,14 @@ fn step_menu(
     name: &str,
     done: bool,
     extra: &str,
+    next: bool,
     add: impl FnOnce(&mut egui::Ui),
 ) {
-    ui.menu_button(step_label(n, &format!("{name} ▾"), done, extra), |ui| {
-        ui.set_max_width(340.0);
+    let label = step_label(n, &format!("{name} ▾"), done, extra, next);
+    let button = egui::Button::new(label);
+    let button = if next { button.fill(GOLD) } else { button };
+    egui::containers::menu::MenuButton::from_button(button).ui(ui, |ui| {
+        ui.set_max_width(420.0);
         add(ui)
     });
 }
@@ -1872,6 +2162,40 @@ mod tests {
         assert_eq!(ev(0.0), "·");
         assert_eq!(ev(-1.234), "-1.23");
         assert_eq!(size_arg("custom", [5000, 2000]), "5000x2000");
+    }
+
+    #[test]
+    fn suggests_the_next_step() {
+        let mut st = StepState {
+            keyframes: 3,
+            included: 100,
+            ..Default::default()
+        };
+        assert_eq!(st.next_step(), 2, "edit keyframes first");
+        st.changed = 2;
+        assert_eq!(st.next_step(), 2, "until every keyframe is saved");
+        st.changed = 3;
+        st.camera_changes = 2;
+        assert_eq!(st.next_step(), 3, "holy grail when the camera changed");
+        st.holy_grail = true;
+        assert_eq!(st.next_step(), 4, "apply new edits");
+        st.interpolated = true;
+        st.changed = 0;
+        st.applied = 3;
+        assert_eq!(st.next_step(), 5);
+        st.deflickered = true;
+        assert_eq!(st.next_step(), 6);
+        st.exported = 100;
+        assert_eq!(st.next_step(), 7);
+        // Holy grail is skipped when nothing changed on the camera.
+        let st = StepState {
+            keyframes: 2,
+            applied: 2,
+            interpolated: true,
+            included: 5,
+            ..Default::default()
+        };
+        assert_eq!(st.next_step(), 5);
     }
 
     #[test]

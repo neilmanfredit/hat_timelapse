@@ -37,6 +37,16 @@ pub struct Frame {
     /// Interpolated develop values (crs name → value), excluding Hat Timelapse offsets.
     #[serde(default)]
     pub values: BTreeMap<String, f64>,
+    /// The exposure value last written into this frame's sidecar.
+    #[serde(default)]
+    pub written_exposure: Option<f64>,
+    /// Fingerprint of the sidecar as Hat Timelapse last wrote it. A different
+    /// fingerprint means an editor has saved the file since.
+    #[serde(default)]
+    pub sidecar_fp: Option<u64>,
+    /// An editor (Lightroom, LightCraft) has saved edits to this frame.
+    #[serde(default)]
+    pub editor_saved: bool,
 }
 
 impl Frame {
@@ -49,6 +59,9 @@ impl Frame {
             holy_grail_ev: 0.0,
             deflicker_ev: 0.0,
             applied_offset_ev: 0.0,
+            written_exposure: None,
+            sidecar_fp: None,
+            editor_saved: false,
             luminance: None,
             values: BTreeMap::new(),
         }

@@ -129,3 +129,46 @@ fn lightcraft_edited_keyframes() {
     assert!(!mid.contains("crs:Temperature"), "{mid}");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn steps_in_any_order_keep_keyframe_edits() {
+    let dir = std::env::temp_dir().join(format!("hat-tl-order-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    for i in 0..20u32 {
+        let v = if i % 2 == 0 { 120 } else { 100 };
+        RgbImage::from_pixel(32, 24, Rgb([v, v, v]))
+            .save(dir.join(format!("o_{i:02}.png")))
+            .unwrap();
+    }
+    hat_timelapse(&dir, &["init", "--keyframes", "2"]);
+    let set = |ev: &str| std::fs::write(dir.join("o_00.xmp"), hat_timelapse_xmp_write(ev)).unwrap();
+    let user = || -> f64 {
+        let p: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(dir.join("hat_timelapse.json")).unwrap())
+                .unwrap();
+        p["frames"][0]["values"]["Exposure2012"].as_f64().unwrap()
+    };
+    let written = || -> f64 {
+        let p: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(dir.join("hat_timelapse.json")).unwrap())
+                .unwrap();
+        p["frames"][0]["written_exposure"].as_f64().unwrap()
+    };
+
+    // Edit a keyframe, then deflicker before applying edits: the edit must survive.
+    set("+1.50");
+    hat_timelapse(&dir, &["deflicker", "--window", "5"]);
+    assert!((user() - 1.5).abs() < 0.011, "{}", user());
+
+    // The editor saves its stale value without re-reading: still +1.50, not double-corrected.
+    set("+1.50");
+    hat_timelapse(&dir, &["interpolate"]);
+    assert!((user() - 1.5).abs() < 0.011, "{}", user());
+
+    // The editor re-reads (sees the written value) and adds half a stop.
+    set(&format!("{:+.2}", written() + 0.5));
+    hat_timelapse(&dir, &["interpolate"]);
+    assert!((user() - 2.0).abs() < 0.011, "{}", user());
+    let _ = std::fs::remove_dir_all(&dir);
+}

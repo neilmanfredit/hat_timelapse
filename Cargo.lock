@@ -1103,7 +1103,7 @@ dependencies = [
 
 [[package]]
 name = "hat_timelapse_cli"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1117,7 +1117,7 @@ dependencies = [
 
 [[package]]
 name = "hat_timelapse_core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "image",
@@ -1129,7 +1129,7 @@ dependencies = [
 
 [[package]]
 name = "hat_timelapse_gui"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "eframe",
@@ -1146,7 +1146,7 @@ dependencies = [
 
 [[package]]
 name = "hat_timelapse_render"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "hat_timelapse_core",
@@ -1158,7 +1158,7 @@ dependencies = [
 
 [[package]]
 name = "hat_timelapse_xmp"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "quick-xml 0.37.5",
