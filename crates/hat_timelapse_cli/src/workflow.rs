@@ -768,7 +768,12 @@ fn frame(
         size.height,
         colour_slug(colour)
     );
-    framing::run(&jobs, &out_dir, &opts, fps)?;
+    framing::run(&jobs, &out_dir, &opts, fps, |d, t| {
+        if d % 5 == 0 || d == t {
+            eprint!("\rframing {d}/{t}");
+        }
+    })?;
+    eprintln!();
     Ok((out_dir, "frame_%06d.tif".into(), fps, name, size))
 }
 

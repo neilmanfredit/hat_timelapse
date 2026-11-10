@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Hat Timelapse
+Comment=Timelapse workflow for LightCraft and Lightroom
+Exec=@BIN@ %f
+Icon=hat-timelapse
+Terminal=false
+Categories=Graphics;Photography;AudioVideo;

@@ -115,20 +115,32 @@ pub fn output_name(prefix: &str, n: usize) -> String {
 }
 
 /// Frame every job into `out_dir`. Returns the number of frames written.
-pub fn run(jobs: &[FrameJob], out_dir: &Path, opts: &Options, fps: f64) -> Result<usize> {
+/// `progress(done, total)` is called as frames complete.
+pub fn run(
+    jobs: &[FrameJob],
+    out_dir: &Path,
+    opts: &Options,
+    fps: f64,
+    progress: impl Fn(usize, usize) + Sync,
+) -> Result<usize> {
     if jobs.is_empty() {
         bail!("nothing to frame: no rendered images found");
     }
     std::fs::create_dir_all(out_dir)?;
+    let done = std::sync::atomic::AtomicUsize::new(0);
     jobs.par_iter()
         .enumerate()
         .try_for_each(|(n, job)| -> Result<()> {
             let dst = out_dir.join(output_name(&opts.prefix, n));
-            if !opts.overwrite && dst.exists() {
-                return Ok(());
+            if opts.overwrite || !dst.exists() {
+                frame_one(&job.input, &dst, &job.motion, opts)
+                    .with_context(|| format!("framing {}", job.input.display()))?;
             }
-            frame_one(&job.input, &dst, &job.motion, opts)
-                .with_context(|| format!("framing {}", job.input.display()))
+            progress(
+                done.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1,
+                jobs.len(),
+            );
+            Ok(())
         })?;
     let manifest = Manifest {
         generator: format!("Hat Timelapse {}", env!("CARGO_PKG_VERSION")),

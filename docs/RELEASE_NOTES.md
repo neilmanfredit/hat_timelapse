@@ -1,7 +1,15 @@
 ## What's in this release
 
-The first public release of Hat Timelapse: a complete command-line
-timelapse workflow for LightCraft and Lightroom.
+**New in 0.2: the Hat Timelapse desktop app.** Open a sequence folder and work
+through numbered steps, with a frame table, a preview showing the video
+framing, and a graph of exposure and brightness you can click to move through
+the frames. Rendering and encoding show progress and can be cancelled. On
+macOS it installs as a normal app (disk image or installer); on Linux it
+appears in your applications menu; on Windows it is `hat_timelapse_app.exe`.
+
+![Hat Timelapse app](https://raw.githubusercontent.com/neilmanfredit/hat_timelapse/main/docs/images/app.png)
+
+Everything from 0.1 is included:
 
 - **Keyframes**: edit a few frames and every frame in between follows,
   smoothly. Settings you don't animate are copied from the first keyframe to
@@ -29,8 +37,14 @@ timelapse workflow for LightCraft and Lightroom.
 curl -fsSL https://raw.githubusercontent.com/neilmanfredit/hat_timelapse/main/install.sh | sh
 ```
 
-**Windows**: download `hat_timelapse-…-windows-x86_64.zip` below, unzip it,
-and put `hat_timelapse.exe` in a folder on your PATH.
+This installs the app and the `hat_timelapse` command.
+
+**macOS by hand**: download `HatTimelapse-…-macos.dmg` below and drag the app to
+Applications. The first time, right-click the app and choose **Open**: it is
+not yet signed with an Apple developer certificate.
+
+**Windows**: download `hat_timelapse-…-windows-x86_64.zip` below and unzip it.
+Run `hat_timelapse_app.exe`, keeping `hat_timelapse.exe` in the same folder.
 
 Then install the companion tools: LightCraft's command-line tool, ffmpeg and
 exiftool. Check everything with:
@@ -63,7 +77,8 @@ Step-by-step instructions, options and recipes:
 
 | File | For |
 | --- | --- |
-| `hat_timelapse-…-macos-universal.tar.gz` | macOS 11 or later, Apple silicon and Intel |
+| `HatTimelapse-…-macos.dmg` | macOS 11 or later, Apple silicon and Intel: drag to Applications |
+| `hat_timelapse-…-macos-universal.tar.gz` | macOS, used by the installer (app and command line) |
 | `hat_timelapse-…-linux-x86_64.tar.gz` | Linux on Intel/AMD |
 | `hat_timelapse-…-linux-aarch64.tar.gz` | Linux on ARM (Raspberry Pi 5, Ampere, etc.) |
 | `hat_timelapse-…-windows-x86_64.zip` | Windows 10 and 11 |

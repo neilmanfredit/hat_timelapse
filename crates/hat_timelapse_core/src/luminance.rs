@@ -15,6 +15,12 @@ pub type Roi = [f64; 4];
 const MAX_EDGE: u32 = 512;
 
 pub fn load_for_analysis(path: &Path) -> Result<DynamicImage> {
+    load_scaled(path, MAX_EDGE)
+}
+
+/// Decode an image (or a raw file's largest embedded preview), scaled so its
+/// longest edge is at most `max_edge`.
+pub fn load_scaled(path: &Path, max_edge: u32) -> Result<DynamicImage> {
     let img = if crate::sequence::is_raw(path) {
         let bytes = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
         largest_embedded_jpeg(&bytes)
@@ -25,8 +31,8 @@ pub fn load_for_analysis(path: &Path) -> Result<DynamicImage> {
             .decode()
             .with_context(|| format!("decoding {}", path.display()))?
     };
-    Ok(if img.width().max(img.height()) > MAX_EDGE {
-        img.thumbnail(MAX_EDGE, MAX_EDGE)
+    Ok(if img.width().max(img.height()) > max_edge {
+        img.thumbnail(max_edge, max_edge)
     } else {
         img
     })

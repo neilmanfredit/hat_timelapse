@@ -1,0 +1,23 @@
+[package]
+name = "hat_timelapse_gui"
+description = "Hat Timelapse desktop app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "hat_timelapse_app"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+image.workspace = true
+hat_timelapse_core.workspace = true
+hat_timelapse_render.workspace = true
+egui = { version = "0.37", features = ["monochrome_emoji_fonts"] }
+eframe = { version = "0.37", default-features = false, features = ["default_fonts", "glow", "persistence", "wayland", "x11"] }
+egui_extras = "0.37"
+egui_plot = "0.38"
+rfd = "0.18"

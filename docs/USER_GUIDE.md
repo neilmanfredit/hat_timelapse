@@ -4,9 +4,54 @@ This guide takes a sequence from the memory card to a finished video. It
 assumes Hat Timelapse, LightCraft (or Lightroom), ffmpeg and exiftool are
 installed; see [INSTALL.md](INSTALL.md).
 
+You can work in the **desktop app** or the **command line**. They do the same
+work on the same project files, so you can switch between them at any point.
+The sections below give the command for each step; the table under *Using the
+desktop app* shows where each one is in the app.
+
 Commands are typed in Terminal (macOS), a shell (Linux) or PowerShell
 (Windows). Every command accepts `--help`, for example
 `hat_timelapse video --help`.
+
+## Using the desktop app
+
+![The Hat Timelapse app](images/app.png)
+
+- **Open a sequence folder**, then **Create project**.
+- The **numbered steps** across the top follow the workflow. A gold tick marks
+  a step that has been done.
+- The **table** lists every frame: keyframes (◆), whether it's included (✔),
+  capture details, and the holy-grail, deflicker and final exposure values.
+  Click ◆ or ✔ to change them.
+- The **preview** shows the selected frame. The gold box is the video framing,
+  including any pan and zoom. Tick **Developed** to see a developed preview
+  once you have rendered previews.
+- The **graph** shows exposure and brightness across the sequence. *Brightness:
+  result* should be smooth where *Brightness: original* flickers. Click or drag
+  on the graph to move through the frames; keyframes are gold lines.
+- **Messages** (bottom right) shows what each step reported. A progress bar and
+  **Cancel** appear while a step runs.
+- Keys: **↑ ↓** move between frames, **K** toggles a keyframe, **X** leaves a
+  frame out.
+
+| Guide section | In the app |
+| --- | --- |
+| 3. Create the project | **Create project** after opening a folder |
+| 4. Choose keyframes | **1 Keyframes ▾**: evenly spaced, toggle the selected frame, **Label keyframes for my editor** |
+| 5. Holy grail | **2 Holy grail ▾** |
+| 7. Spread the edits | **3 Read keyframes ▾** |
+| 8. Remove flicker | **4 Deflicker**: fast, or with developed previews (several passes) |
+| 9. Develop every frame | **5 Render ▾**: 16-bit or 32-bit float, or previews only |
+| 10. Pan and zoom | **Tools → Pan & zoom…**: add a key at the selected frame |
+| 11. Make the video | **6 Video**; for a Lightroom export, use **Developed frames → Lightroom export…** |
+| 12. Export for EffectCraft or FilmCraft | **7 TIFF export** |
+| 13. Long-term filters | **Tools → Long-term filters…** |
+| 14. Batch | **Tools → Batch…** |
+| Check your tools | **Tools → Check tools** |
+
+Editing the keyframes (section 6) still happens in LightCraft or Lightroom.
+After **3 Read keyframes**, use *Read Metadata from File* in your editor to see
+the result there.
 
 ## Contents
 
@@ -288,7 +333,7 @@ The finished file appears in the project folder, for example
 | `av1` | Smallest files; YouTube; HDR. |
 | `prores422-hq` | Editing in Final Cut, Premiere, Resolve or FilmCraft. |
 | `prores4444` / `prores4444-xq` | Highest-quality masters. |
-| `dnxhr-hq` / `dnxhr-hqx` / `dnxhr-444` | Editing in Avid and Resolve; Windows-friendly. HQX and 444 carry HDR. |
+| `dnxhr-hq` / `dnxhr-hqx` / `dnxhr444` | Editing in Avid and Resolve; Windows-friendly. HQX and 444 carry HDR. |
 
 ### Other options
 

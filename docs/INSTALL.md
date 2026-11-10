@@ -1,6 +1,8 @@
 # Installing Hat Timelapse
 
-Hat Timelapse is a command-line program. It needs three companion tools:
+Hat Timelapse comes as a desktop app (**Hat Timelapse**) and a command-line
+program (`hat_timelapse`). The installer and downloads include both. It needs
+three companion tools:
 
 | Tool | Needed for | Required? |
 | --- | --- | --- |
@@ -22,8 +24,17 @@ Open **Terminal** (Applications → Utilities) and run:
 curl -fsSL https://raw.githubusercontent.com/neilmanfredit/hat_timelapse/main/install.sh | sh
 ```
 
-This puts `hat_timelapse` in `~/bin`. If it says `~/bin` is not on your PATH,
-run the line it prints, then open a new Terminal window.
+This puts the **Hat Timelapse** app in `~/Applications` (open it from Finder,
+Launchpad or Spotlight) and the `hat_timelapse` command in `~/bin`. If it says
+`~/bin` is not on your PATH, run the line it prints, then open a new Terminal
+window.
+
+**Or use the disk image**: download `HatTimelapse-<version>-macos.dmg` from the
+[latest release](https://github.com/neilmanfredit/hat_timelapse/releases/latest),
+open it, and drag **Hat Timelapse** to **Applications**. The app is not yet
+signed with an Apple developer certificate, so the first time, **right-click
+it and choose Open**, then **Open** again. If macOS still refuses, run
+`xattr -dr com.apple.quarantine "/Applications/Hat Timelapse.app"`.
 
 <details>
 <summary>Installing by hand instead</summary>
@@ -104,7 +115,10 @@ work.
 curl -fsSL https://raw.githubusercontent.com/neilmanfredit/hat_timelapse/main/install.sh | sh
 ```
 
-Builds are provided for x86_64 and aarch64.
+Builds are provided for x86_64 and aarch64. The installer adds **Hat
+Timelapse** to your applications menu and puts `hat_timelapse_app` and
+`hat_timelapse` in `~/bin`. The app needs a normal desktop session (X11 or
+Wayland) with OpenGL.
 
 ### 2. Install LightCraft
 
@@ -132,11 +146,13 @@ hat_timelapse doctor
 
 1. From the [latest release](https://github.com/neilmanfredit/hat_timelapse/releases/latest),
    download `hat_timelapse-<version>-windows-x86_64.zip` and unzip it.
-2. Create a folder for command-line tools, such as `C:\Tools`, and copy
-   `hat_timelapse.exe` into it.
+2. Create a folder such as `C:\Tools\HatTimelapse` and copy
+   `hat_timelapse_app.exe` (the app) and `hat_timelapse.exe` (the engine) into
+   it. Keep them together. Right-click `hat_timelapse_app.exe` → **Send to →
+   Desktop (create shortcut)** for a shortcut.
 3. Add that folder to your PATH. Search the Start menu for **Edit environment
    variables for your account**, select **Path**, click **Edit → New**, and
-   enter `C:\Tools`.
+   enter `C:\Tools\HatTimelapse`. This is only needed for the command line.
 4. Install LightCraft from its `.msi`, and put `lightcraft-cli.exe` in the
    same folder if the installer did not add it to your PATH.
 5. Install ffmpeg and exiftool. With winget, in PowerShell:
@@ -166,7 +182,10 @@ on your PATH.
 
 - **Update:** run the install command again. It replaces the program with the
   latest release.
-- **Remove:** delete `~/bin/hat_timelapse` (or `hat_timelapse.exe` on Windows).
+- **Remove:** delete `~/bin/hat_timelapse` and `~/bin/hat_timelapse_app`, and
+  the app (`~/Applications/Hat Timelapse.app` on macOS,
+  `~/.local/share/applications/hat-timelapse.desktop` on Linux), or the folder
+  you unzipped on Windows.
   Projects keep their `hat_timelapse.json` and `.hat_timelapse` folder. Delete
   those too if you no longer need them.
 
@@ -178,4 +197,5 @@ on your PATH.
 | `permission denied` | The file is not marked as a program, or you copied a folder rather than the file inside it. Check with `ls -la ~/bin`: a line starting with `d` is a folder. Copy the file from inside it, then run `chmod +x ~/bin/hat_timelapse`. |
 | macOS: "cannot be opened because the developer cannot be verified" | Run `xattr -d com.apple.quarantine ~/bin/hat_timelapse`. |
 | `could not run lightcraft-cli` | The LightCraft command-line tool is not installed or not on your PATH. See step 2 for your system. |
+| The app says it cannot find LightCraft or ffmpeg, but Terminal can | The app looks in `~/bin`, `/opt/homebrew/bin`, `/usr/local/bin` and `~/.cargo/bin` as well as the normal PATH. If your tools are elsewhere, copy or link them into `~/bin`. **Tools → Check tools** shows what the app can find. |
 | `ffmpeg … was built without the libx265 encoder` | Install ffmpeg from Homebrew, your distribution or winget, as above. Those builds include every encoder Hat Timelapse uses. |

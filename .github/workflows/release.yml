@@ -58,15 +58,17 @@ jobs:
           mkdir -p out
           if [ "${{ matrix.target }}" = "macos-universal" ]; then
             export MACOSX_DEPLOYMENT_TARGET=11.0
-            cargo build --release --locked -p hat_timelapse_cli --target aarch64-apple-darwin
-            cargo build --release --locked -p hat_timelapse_cli --target x86_64-apple-darwin
-            lipo -create -output out/hat_timelapse \
-              target/aarch64-apple-darwin/release/hat_timelapse \
-              target/x86_64-apple-darwin/release/hat_timelapse
+            for t in aarch64-apple-darwin x86_64-apple-darwin; do
+              cargo build --release --locked -p hat_timelapse_cli -p hat_timelapse_gui --target $t
+            done
+            for b in hat_timelapse hat_timelapse_app; do
+              lipo -create -output out/$b target/aarch64-apple-darwin/release/$b target/x86_64-apple-darwin/release/$b
+            done
           else
-            cargo build --release --locked -p hat_timelapse_cli
-            cp target/release/hat_timelapse* out/ 2>/dev/null || true
-            rm -f out/*.d out/*.pdb
+            cargo build --release --locked -p hat_timelapse_cli -p hat_timelapse_gui
+            for b in hat_timelapse hat_timelapse_app; do
+              cp target/release/$b out/ 2>/dev/null || cp target/release/$b.exe out/
+            done
           fi
           ls -l out
 
@@ -78,15 +80,41 @@ jobs:
         run: |
           name="hat_timelapse-${TAG}-${{ matrix.target }}"
           mkdir -p "pkg/$name" dist
-          cp out/* "pkg/$name/"
           cp README.md LICENSE-MIT LICENSE-APACHE docs/INSTALL.md docs/USER_GUIDE.md "pkg/$name/"
-          cd pkg
-          if [ "${{ matrix.target }}" = "windows-x86_64" ]; then
-            7z a -tzip "../dist/$name.zip" "$name" > /dev/null
-          else
-            tar -czf "../dist/$name.tar.gz" "$name"
-          fi
-          ls -l ../dist
+          case "${{ matrix.target }}" in
+            macos-universal)
+              app="pkg/Hat Timelapse.app"
+              mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+              cp out/hat_timelapse out/hat_timelapse_app "$app/Contents/MacOS/"
+              sed "s/@VERSION@/${TAG#v}/g" packaging/macos/Info.plist > "$app/Contents/Info.plist"
+              mkdir icon.iconset
+              for s in 16 32 128 256 512; do
+                sips -z $s $s assets/icon.png --out "icon.iconset/icon_${s}x${s}.png" > /dev/null
+                sips -z $((s*2)) $((s*2)) assets/icon.png --out "icon.iconset/icon_${s}x${s}@2x.png" > /dev/null
+              done
+              iconutil -c icns icon.iconset -o "$app/Contents/Resources/HatTimelapse.icns"
+              codesign --force --deep --sign - "$app"
+              # Archive for the installer: the app plus the command-line engine.
+              cp -R "$app" "pkg/$name/"
+              cp out/hat_timelapse "pkg/$name/"
+              tar -czf "dist/$name.tar.gz" -C pkg "$name"
+              # Disk image for installing by hand: drag the app to Applications.
+              mkdir -p dmg && cp -R "$app" dmg/ && ln -s /Applications dmg/Applications
+              cp docs/INSTALL.md dmg/
+              hdiutil create -volname "Hat Timelapse" -srcfolder dmg -ov -format UDZO "dist/HatTimelapse-${TAG}-macos.dmg"
+              ;;
+            windows-x86_64)
+              cp out/hat_timelapse.exe out/hat_timelapse_app.exe "pkg/$name/"
+              (cd pkg && 7z a -tzip "../dist/$name.zip" "$name" > /dev/null)
+              ;;
+            *)
+              cp out/hat_timelapse out/hat_timelapse_app "pkg/$name/"
+              cp packaging/linux/hat-timelapse.desktop "pkg/$name/"
+              cp assets/icon-256.png "pkg/$name/hat-timelapse.png"
+              tar -czf "dist/$name.tar.gz" -C pkg "$name"
+              ;;
+          esac
+          ls -l dist
 
       - uses: actions/upload-artifact@v4
         with:

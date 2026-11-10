@@ -3,7 +3,13 @@
 Hat Timelapse aims to cover the full professional timelapse workflow. This list
 tracks what is built, what is next and what still needs checking.
 
-## Built (v0.1)
+## Built
+
+| Area | Feature |
+| --- | --- |
+| Desktop app (v0.2) | Numbered workflow steps, frame table, preview with video framing, exposure and brightness graph with click-to-scrub, progress and cancel, settings windows for video, TIFF, deflicker, filters, pan/zoom and batch; macOS app and disk image, Linux menu entry, Windows executable |
+
+### Engine (v0.1)
 
 | Area | Feature |
 | --- | --- |
@@ -39,9 +45,9 @@ tracks what is built, what is next and what still needs checking.
 
 ## Next
 
-- **Desktop app** (egui): a frame strip, keyframe editor,
-  and a brightness graph showing measured, target and corrected curves, with
-  draggable curves for exposure and white balance.
+- **Desktop app, next steps**: editing exposure and white balance curves by
+  dragging on the graph; thumbnails in the table; a side-by-side keyframe
+  view; signed and notarised macOS builds.
 - **Live LightCraft link** through its JSON control channel or MCP server.
   Keyframe edits would then flow without saving sidecars, and previews would
   render in-process for faster deflicker passes.

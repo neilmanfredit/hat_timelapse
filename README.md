@@ -8,6 +8,11 @@ spreads those edits across every frame, fixes exposure jumps from day-to-night
 shooting, removes flicker, frames the shot, and delivers a finished video or
 a TIFF sequence ready for EffectCraft and FilmCraft.
 
+It comes as a **desktop app** and as a **command-line tool**. Both do the same
+work and share the same project files.
+
+![Hat Timelapse desktop app](docs/images/app.png)
+
 ```
  camera files ─► hat_timelapse init ─► keyframes ─► edit keyframes in LightCraft or Lightroom
                                                         │
@@ -43,9 +48,15 @@ formats the editors already use:
 curl -fsSL https://raw.githubusercontent.com/neilmanfredit/hat_timelapse/main/install.sh | sh
 ```
 
-**Windows**: download the `.zip` from the
+This installs the **Hat Timelapse app** (in `~/Applications` on macOS, or the
+applications menu on Linux) and the `hat_timelapse` command.
+
+**macOS by hand**: download `HatTimelapse-…-macos.dmg` from the
 [latest release](https://github.com/neilmanfredit/hat_timelapse/releases/latest)
-and put `hat_timelapse.exe` on your PATH.
+and drag the app to Applications.
+
+**Windows**: download the `.zip` from the latest release and unzip it.
+`hat_timelapse_app.exe` is the app; keep `hat_timelapse.exe` in the same folder.
 
 You also need LightCraft's command-line tool (`lightcraft-cli`), ffmpeg and
 exiftool. On macOS, LightCraft's command-line tool is a **separate download**
@@ -62,7 +73,22 @@ from the app. Then check everything with `hat_timelapse doctor`.
   sequences.
 - **[Roadmap](docs/ROADMAP.md)**: what's built and what's next.
 
-## Quick start
+## Quick start: the app
+
+1. Open **Hat Timelapse** and choose **Open a sequence folder…**, then
+   **Create project**.
+2. Work along the numbered steps at the top: **1 Keyframes**, then edit the
+   keyframes in LightCraft or Lightroom, then **2 Holy grail** (if you changed
+   exposure while shooting), **3 Read keyframes**, **4 Deflicker**,
+   **5 Render** and **6 Video**.
+3. The table lists every frame. The preview shows the selected frame with the
+   video framing in gold. The graph shows exposure and brightness across the
+   sequence; click or drag on it to move through the frames.
+
+Keys: ↑ ↓ move between frames, **K** toggles a keyframe, **X** leaves a frame
+out. **Tools** holds long-term filters, pan and zoom, and batch.
+
+## Quick start: command line
 
 ```bash
 cd ~/Timelapses/sunset-2026-11-08
@@ -160,7 +186,7 @@ memory-saving settings.
 | `prores4444` / `prores4444-xq` | MOV | 12-bit 4:4:4 | Yes |
 | `dnxhr-hq` | MOV | 8-bit 4:2:2 | No |
 | `dnxhr-hqx` | MOV | 10-bit 4:2:2 | Yes |
-| `dnxhr-444` | MOV | 10-bit 4:4:4 | Yes |
+| `dnxhr444` | MOV | 10-bit 4:4:4 | Yes |
 
 `--motion-blur N` blends N frames. `--quality` sets CRF for H.264, HEVC and AV1.
 
@@ -220,7 +246,8 @@ crates/
   hat_timelapse_core     sequence, EXIF, keyframe interpolation, holy grail, deflicker, long-term filters
   hat_timelapse_xmp      safe read/update of crs: XMP sidecars (everything else is preserved)
   hat_timelapse_render   LightCraft driver, framing and colour management, ffmpeg encoding
-  hat_timelapse_cli      the `hat_timelapse` command
+  hat_timelapse_cli      the `hat_timelapse` command (the engine)
+  hat_timelapse_gui      the desktop app (egui); runs each step through the engine
 docs/                workflow notes, feature list and roadmap
 ```
 
@@ -230,14 +257,13 @@ sequences.
 
 ## Status
 
-Version 0.1, command line only. Downloads for macOS (universal), Linux
+Version 0.2: desktop app and command line. Downloads for macOS (universal), Linux
 (x86_64, aarch64) and Windows are on the
 [releases page](https://github.com/neilmanfredit/hat_timelapse/releases). The full pipeline runs end to end and is
 tested on Linux. CI builds and tests on Linux, macOS and Windows. LightCraft
 rendering was confirmed with LightCraft 0.20.0 on macOS with Canon EOS R CR3
 files: full-resolution 16-bit and 32-bit float TIFF, with exposure and white
-balance applied both by `--set` and by XMP settings. A desktop app with a graph-based
-keyframe and brightness editor is the next major piece.
+balance applied both by `--set` and by XMP settings.
 
 ## Licence
 

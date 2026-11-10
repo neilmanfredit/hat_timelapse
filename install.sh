@@ -3,7 +3,9 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/neilmanfredit/hat_timelapse/main/install.sh | sh
 #
-# The program is installed to ~/bin (set HAT_TIMELAPSE_DIR to choose another folder).
+# The command-line engine goes in ~/bin (set HAT_TIMELAPSE_DIR to choose another
+# folder). On macOS the app goes in ~/Applications; on Linux it is added to the
+# applications menu.
 set -eu
 
 REPO="neilmanfredit/hat_timelapse"
@@ -36,7 +38,8 @@ trap 'rm -rf "$tmp"' EXIT
 echo "Downloading $url"
 curl -fsSL "$url" -o "$tmp/hat_timelapse.tar.gz"
 tar -xzf "$tmp/hat_timelapse.tar.gz" -C "$tmp"
-bin=$(find "$tmp" -type f -name hat_timelapse | head -n 1)
+bin=$(find "$tmp" -type f -name hat_timelapse -not -path "*.app/*" | head -n 1)
+[ -n "$bin" ] || bin=$(find "$tmp" -type f -name hat_timelapse | head -n 1)
 if [ -z "$bin" ]; then
   echo "The download did not contain the hat_timelapse program." >&2
   exit 1
@@ -52,6 +55,34 @@ fi
 echo
 echo "Installed: $DEST/hat_timelapse"
 "$DEST/hat_timelapse" --version
+
+# The desktop app.
+if [ "$os" = "Darwin" ]; then
+  app=$(find "$tmp" -maxdepth 3 -type d -name "Hat Timelapse.app" | head -n 1)
+  if [ -n "$app" ]; then
+    apps="$HOME/Applications"
+    mkdir -p "$apps"
+    rm -rf "$apps/Hat Timelapse.app"
+    cp -R "$app" "$apps/"
+    xattr -dr com.apple.quarantine "$apps/Hat Timelapse.app" 2>/dev/null || true
+    echo "Installed: $apps/Hat Timelapse.app  (open it from Finder, Launchpad or Spotlight)"
+  fi
+else
+  gui=$(find "$tmp" -type f -name hat_timelapse_app | head -n 1)
+  if [ -n "$gui" ]; then
+    cp "$gui" "$DEST/hat_timelapse_app"
+    chmod 755 "$DEST/hat_timelapse_app"
+    share="${XDG_DATA_HOME:-$HOME/.local/share}"
+    mkdir -p "$share/applications" "$share/icons/hicolor/256x256/apps"
+    icon=$(find "$tmp" -type f -name hat-timelapse.png | head -n 1)
+    [ -n "$icon" ] && cp "$icon" "$share/icons/hicolor/256x256/apps/hat-timelapse.png"
+    desktop=$(find "$tmp" -type f -name hat-timelapse.desktop | head -n 1)
+    if [ -n "$desktop" ]; then
+      sed "s|@BIN@|$DEST/hat_timelapse_app|" "$desktop" > "$share/applications/hat-timelapse.desktop"
+    fi
+    echo "Installed: $DEST/hat_timelapse_app  (Hat Timelapse in your applications menu)"
+  fi
+fi
 
 case ":$PATH:" in
   *":$DEST:"*) ;;
