@@ -86,7 +86,7 @@ jobs:
               app="pkg/Hat Timelapse.app"
               mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
               cp out/hat_timelapse out/hat_timelapse_app "$app/Contents/MacOS/"
-              sed "s/@VERSION@/${TAG#v}/g" packaging/macos/Info.plist > "$app/Contents/Info.plist"
+              sed "s/@VERSION@/${TAG#[vV]}/g" packaging/macos/Info.plist > "$app/Contents/Info.plist"
               mkdir icon.iconset
               for s in 16 32 128 256 512; do
                 sips -z $s $s assets/icon.png --out "icon.iconset/icon_${s}x${s}.png" > /dev/null
