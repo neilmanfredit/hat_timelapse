@@ -705,7 +705,7 @@ impl HatApp {
             // 2 Edit keyframes (in Lightroom or LightCraft)
             let edited = st.applied + st.changed;
             let badge = if st.changed > 0 {
-                format!("{edited}/{} · {} new", st.keyframes, st.changed)
+                format!("{edited}/{} · {} pending apply", st.keyframes, st.changed)
             } else {
                 format!("{edited}/{}", st.keyframes)
             };
@@ -917,11 +917,11 @@ impl HatApp {
                     ui.horizontal(|ui| {
                         theme::eyebrow(ui, "Reminder");
                         let how = if !self.prefs.lightcraft {
-                            "in Lightroom select all frames → Metadata → Read Metadata from Files."
+                            "Select all frames in Lightroom → Metadata → Read Metadata from Files."
                         } else {
-                            "in LightCraft select all frames → Photo → Read Metadata from File."
+                            "Select all frames in LightCraft → Photo → Read Metadata from File."
                         };
-                        ui.label(format!("The frames' settings were updated. Before you look at or edit them again, {how}"));
+                        ui.label(format!("Frames updated — re-read in your editor before editing again. {how}"));
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                             if ui.small_button("Dismiss").clicked() {
                                 self.reminder = false;
@@ -2063,7 +2063,7 @@ fn step_label(n: usize, name: &str, done: bool, extra: &str, next: bool) -> Rich
     } else if done {
         t.color(GOLD_SOFT)
     } else {
-        t
+        t.color(TEXT_DIM)
     }
 }
 

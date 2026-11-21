@@ -1,5 +1,13 @@
 ## What's in this release
 
+**New in 0.3.1**
+- Pending steps in the toolbar now use a dimmer text colour, making the
+  done → pending → next hierarchy clearer at a glance.
+- The "Edit keyframes" badge now says **"2 pending apply"** instead of
+  "2 new" — clearer that these are edits waiting for the Apply step.
+- The reminder bar after sidecar-writing steps now leads with the action:
+  "Frames updated — re-read in your editor before editing again."
+
 **New in 0.3**
 - **Fixed: keyframe edits could be lost.** Running Holy grail or Deflicker
   after editing keyframes, but before applying the edits, overwrote the
