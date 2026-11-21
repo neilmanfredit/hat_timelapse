@@ -212,8 +212,23 @@ fn frame_one(src: &Path, dst: &Path, m: &MotionKey, opts: &Options) -> Result<()
         });
         DynamicImage::ImageRgb16(out).save_with_format(&tmp, image::ImageFormat::Tiff)?;
     }
-    std::fs::rename(&tmp, dst)?;
+    rename_or_replace(&tmp, dst)?;
     Ok(())
+}
+
+fn rename_or_replace(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
+    match std::fs::rename(src, dst) {
+        Ok(()) => Ok(()),
+        Err(e) if matches!(e.raw_os_error(), Some(1) | Some(18)) => {
+            if let Err(copy_err) = std::fs::copy(src, dst) {
+                let _ = std::fs::remove_file(dst);
+                return Err(copy_err);
+            }
+            let _ = std::fs::remove_file(src);
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
 }
 
 #[cfg(test)]

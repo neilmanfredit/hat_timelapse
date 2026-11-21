@@ -371,8 +371,25 @@ pub fn update_file(path: &Path, edit: &Edit) -> Result<()> {
     let new = apply(&xml, edit).with_context(|| format!("updating {}", path.display()))?;
     let tmp = path.with_extension("xmp.tmp");
     std::fs::write(&tmp, new)?;
-    std::fs::rename(&tmp, path)?;
+    rename_or_replace(&tmp, path)?;
     Ok(())
+}
+
+/// Atomic rename with a copy+delete fallback for GVFS/network mounts (SMB,
+/// NFS) that reject `rename(2)` with EPERM or EXDEV.
+fn rename_or_replace(src: &Path, dst: &Path) -> std::io::Result<()> {
+    match std::fs::rename(src, dst) {
+        Ok(()) => Ok(()),
+        Err(e) if matches!(e.raw_os_error(), Some(1) | Some(18)) => {
+            if let Err(copy_err) = std::fs::copy(src, dst) {
+                let _ = std::fs::remove_file(dst);
+                return Err(copy_err);
+            }
+            let _ = std::fs::remove_file(src);
+            Ok(())
+        }
+        Err(e) => Err(e),
+    }
 }
 
 #[cfg(test)]

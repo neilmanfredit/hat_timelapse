@@ -205,7 +205,7 @@ impl Project {
         let path = Self::file_path(&self.dir);
         let tmp = path.with_extension("json.tmp");
         std::fs::write(&tmp, serde_json::to_string_pretty(self)?)?;
-        std::fs::rename(&tmp, &path)?;
+        rename_or_replace(&tmp, &path)?;
         Ok(())
     }
 
@@ -295,6 +295,21 @@ impl Project {
                 cy: y[i],
             })
             .collect()
+    }
+}
+
+fn rename_or_replace(src: &std::path::Path, dst: &std::path::Path) -> std::io::Result<()> {
+    match std::fs::rename(src, dst) {
+        Ok(()) => Ok(()),
+        Err(e) if matches!(e.raw_os_error(), Some(1) | Some(18)) => {
+            if let Err(copy_err) = std::fs::copy(src, dst) {
+                let _ = std::fs::remove_file(dst);
+                return Err(copy_err);
+            }
+            let _ = std::fs::remove_file(src);
+            Ok(())
+        }
+        Err(e) => Err(e),
     }
 }
 

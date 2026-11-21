@@ -1,5 +1,13 @@
 ## What's in this release
 
+**New in 0.3.5**
+- **Fixed: "Operation not permitted" on network shares.** Browsing to a
+  sequence folder via Dolphin (KIO/GVFS) no longer causes Apply edits,
+  Holy grail, Deflicker or TIFF rendering to fail. The app now detects when
+  the filesystem rejects an atomic rename (EPERM / EXDEV) and falls back to
+  a safe copy-then-delete so writes still land atomically from the app's
+  perspective.
+
 **New in 0.3.4**
 - **Fredian Shield colours + Astryx structure.** The theme now combines the
   Fredian Shield navy/gold palette with the Astryx neutral dark design language:
