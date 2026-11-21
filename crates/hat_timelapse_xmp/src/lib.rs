@@ -376,11 +376,15 @@ pub fn update_file(path: &Path, edit: &Edit) -> Result<()> {
 }
 
 /// Atomic rename with a copy+delete fallback for GVFS/network mounts (SMB,
-/// NFS) that reject `rename(2)` with EPERM or EXDEV.
+/// NFS) that reject `rename(2)` with EPERM or EXDEV. Deletes the destination
+/// before copying because some GVFS mounts block overwriting existing files.
 fn rename_or_replace(src: &Path, dst: &Path) -> std::io::Result<()> {
     match std::fs::rename(src, dst) {
         Ok(()) => Ok(()),
         Err(e) if matches!(e.raw_os_error(), Some(1) | Some(18)) => {
+            // Remove dst first: GVFS allows creating new files but blocks
+            // overwriting existing ones via copy or rename.
+            let _ = std::fs::remove_file(dst);
             if let Err(copy_err) = std::fs::copy(src, dst) {
                 let _ = std::fs::remove_file(dst);
                 return Err(copy_err);

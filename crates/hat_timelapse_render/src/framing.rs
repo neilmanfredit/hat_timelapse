@@ -220,6 +220,7 @@ fn rename_or_replace(src: &std::path::Path, dst: &std::path::Path) -> std::io::R
     match std::fs::rename(src, dst) {
         Ok(()) => Ok(()),
         Err(e) if matches!(e.raw_os_error(), Some(1) | Some(18)) => {
+            let _ = std::fs::remove_file(dst);
             if let Err(copy_err) = std::fs::copy(src, dst) {
                 let _ = std::fs::remove_file(dst);
                 return Err(copy_err);

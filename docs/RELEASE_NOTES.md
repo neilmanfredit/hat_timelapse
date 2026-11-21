@@ -1,12 +1,18 @@
 ## What's in this release
 
+**New in 0.3.6**
+- **Fixed: "Operation not permitted" on network shares (complete fix).** The
+  v0.3.5 fallback tried to overwrite existing `.xmp` files, which GVFS also
+  rejects. The fallback now removes the destination before writing, so Apply
+  edits, Holy grail, Deflicker and TIFF rendering all work on KDE Dolphin
+  KIO/GVFS mounts.
+
 **New in 0.3.5**
 - **Fixed: "Operation not permitted" on network shares.** Browsing to a
   sequence folder via Dolphin (KIO/GVFS) no longer causes Apply edits,
   Holy grail, Deflicker or TIFF rendering to fail. The app now detects when
   the filesystem rejects an atomic rename (EPERM / EXDEV) and falls back to
-  a safe copy-then-delete so writes still land atomically from the app's
-  perspective.
+  a safe copy-then-delete.
 
 **New in 0.3.4**
 - **Fredian Shield colours + Astryx structure.** The theme now combines the
