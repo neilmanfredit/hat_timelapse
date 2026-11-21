@@ -1,5 +1,12 @@
 ## What's in this release
 
+**New in 0.3.4**
+- **Fredian Shield colours + Astryx structure.** The theme now combines the
+  Fredian Shield navy/gold palette with the Astryx neutral dark design language:
+  12 px window corner radius, 8 px menus, 6 px widgets, subtle borders, and
+  card-surface separation — while keeping the navy `#0D1B3E` / gold `#C8A82C`
+  brand colours throughout.
+
 **New in 0.3.3**
 - **Astryx neutral dark theme.** The app has moved from navy/gold to the Astryx
   design language: `#111112` body, `#1F1F22` card surfaces, `#3E9EFB` accent,
