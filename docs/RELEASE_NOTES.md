@@ -1,6 +1,6 @@
 ## What's in this release
 
-**New in 0.3.2**
+**New in 0.3.3**
 - **Astryx neutral dark theme.** The app has moved from navy/gold to the Astryx
   design language: `#111112` body, `#1F1F22` card surfaces, `#3E9EFB` accent,
   `#DFE2E5`/`#AAAFB5` text, and Astryx semantic colours for success, warning
