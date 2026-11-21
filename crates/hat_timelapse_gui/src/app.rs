@@ -921,7 +921,9 @@ impl HatApp {
                         } else {
                             "Select all frames in LightCraft → Photo → Read Metadata from File."
                         };
-                        ui.label(format!("Frames updated — re-read in your editor before editing again. {how}"));
+                        ui.label(format!(
+                            "Frames updated — re-read in your editor before editing again. {how}"
+                        ));
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                             if ui.small_button("Dismiss").clicked() {
                                 self.reminder = false;

@@ -3,18 +3,18 @@
 use egui::{Color32, CornerRadius, Stroke, Visuals};
 
 // Astryx background scale
-pub const NAVY: Color32 = Color32::from_rgb(0x11, 0x11, 0x12);        // body / panel fill
-pub const NAVY_DEEP: Color32 = Color32::from_rgb(0x0d, 0x0d, 0x0e);   // deepest inset
+pub const NAVY: Color32 = Color32::from_rgb(0x11, 0x11, 0x12); // body / panel fill
+pub const NAVY_DEEP: Color32 = Color32::from_rgb(0x0d, 0x0d, 0x0e); // deepest inset
 pub const NAVY_RAISED: Color32 = Color32::from_rgb(0x1f, 0x1f, 0x22); // card / window fill
 pub const NAVY_LINE: Color32 = Color32::from_rgba_premultiplied(0x10, 0x11, 0x11, 26); // border ~10% white
-// Astryx accent (replaces gold)
-pub const GOLD: Color32 = Color32::from_rgb(0x3e, 0x9e, 0xfb);        // accent blue
-pub const GOLD_SOFT: Color32 = Color32::from_rgb(0x7d, 0xbf, 0xfd);   // accent blue soft
-// Astryx text
+                                                                                       // Astryx accent (replaces gold)
+pub const GOLD: Color32 = Color32::from_rgb(0x3e, 0x9e, 0xfb); // accent blue
+pub const GOLD_SOFT: Color32 = Color32::from_rgb(0x7d, 0xbf, 0xfd); // accent blue soft
+                                                                    // Astryx text
 pub const TEXT: Color32 = Color32::from_rgb(0xdf, 0xe2, 0xe5);
 pub const TEXT_DIM: Color32 = Color32::from_rgb(0xaa, 0xaf, 0xb5);
 // Astryx semantic colours
-pub const SKY: Color32 = Color32::from_rgb(0x7d, 0xbf, 0xfd);         // keyframe-changed indicator
+pub const SKY: Color32 = Color32::from_rgb(0x7d, 0xbf, 0xfd); // keyframe-changed indicator
 pub const GOOD: Color32 = Color32::from_rgb(0xa5, 0xf6, 0x90);
 pub const WARN: Color32 = Color32::from_rgb(0xfb, 0xce, 0x03);
 
